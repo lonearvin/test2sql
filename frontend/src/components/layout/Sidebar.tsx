@@ -17,6 +17,8 @@ interface SidebarProps {
   currentPage: PageType;
   onNavigate: (page: PageType) => void;
   onLogout: () => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 const menuItems: { id: PageType; label: string; icon: React.ReactNode }[] = [
@@ -26,8 +28,7 @@ const menuItems: { id: PageType; label: string; icon: React.ReactNode }[] = [
   { id: 'settings', label: '设置中心', icon: <Settings className="w-5 h-5" /> },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout }) => {
-  const [collapsed, setCollapsed] = React.useState(false);
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout, collapsed, onToggleCollapse }) => {
 
   return (
     <aside
@@ -109,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, onLogout }) 
       </div>
 
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={onToggleCollapse}
         className="absolute -right-3 top-24 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center hover:bg-gray-100 hover:border-blue-500/30 transition-all duration-200 shadow-lg"
       >
         {collapsed ? (

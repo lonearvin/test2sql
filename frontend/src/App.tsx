@@ -17,6 +17,7 @@ interface AppContentProps {
 
 const AppContent = ({ currentPage, onNavigate }: AppContentProps) => {
   const { logout } = useAuth();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const renderPage = () => {
     switch (currentPage) {
@@ -47,8 +48,10 @@ const AppContent = ({ currentPage, onNavigate }: AppContentProps) => {
             currentPage={currentPage} 
             onNavigate={onNavigate} 
             onLogout={logout}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
           />
-          <main className="ml-64 p-8 min-h-screen">
+          <main className={`min-h-screen p-8 transition-all duration-300 ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
             {renderPage()}
           </main>
         </div>

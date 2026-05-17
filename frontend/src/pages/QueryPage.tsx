@@ -305,8 +305,9 @@ const QueryPage: React.FC = () => {
     return Object.keys(results[0]);
   };
 
-  const formatTimestamp = (date: Date) => {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  const formatTimestamp = (date: Date | string) => {
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatDate = (dateStr: string) => {
