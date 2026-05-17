@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { dataSourceAPI, textToSQLAPI } from '../api';
 import Button from '@/components/ui/Button';
