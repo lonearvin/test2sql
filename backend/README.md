@@ -6,6 +6,7 @@
 
 ## 目录
 
+- [项目概览](#项目概览)
 - [系统架构](#系统架构)
 - [分层设计](#分层设计)
 - [核心流程](#核心流程)
@@ -13,9 +14,47 @@
 - [API 接口文档](#api-接口文档)
 - [数据模型](#数据模型)
 - [配置说明](#配置说明)
+- [环境配置](#环境配置)
 - [快速开始](#快速开始)
+- [测试方法](#测试方法)
 - [Docker 部署](#docker-部署)
 - [安全机制](#安全机制)
+- [维护指南](#维护指南)
+- [故障排查](#故障排查)
+
+---
+
+## 项目概览
+
+### 系统定位
+
+Text-to-SQL 是一个**智能问数系统**，核心能力是：用户用自然语言提出问题（如"上个月销售额最高的5个产品是什么？"），系统自动理解数据库结构，生成正确的 SQL 并执行，返回结构化查询结果。
+
+### 核心能力矩阵
+
+| 能力 | 说明 |
+|------|------|
+| **自然语言 → SQL** | 将中文/英文问题转化为 MySQL/PostgreSQL 查询 |
+| **Schema 智能解析** | 自动提取 COMMENT / 主键 / 外键 / 样本数据，理解表和字段含义 |
+| **RAG 检索增强** | 历史成功查询的向量检索，增强 LLM 生成准确性 |
+| **多轮对话** | 支持上下文连续问答，理解代词和省略 |
+| **多层安全** | SQL 关键词检测 + 结果 LIMIT + 敏感字段脱敏 + 用户数据隔离 |
+| **语义层** | 用户可为表和字段添加中文业务说明，覆盖 COMMENT |
+| **多数据源** | 支持 MySQL 和 PostgreSQL，按用户隔离管理 |
+
+### 技术选型
+
+| 层次 | 技术 | 作用 |
+|------|------|------|
+| Web 框架 | FastAPI + Uvicorn | 异步 HTTP 服务，自动 OpenAPI 文档 |
+| ORM | SQLAlchemy 2.0 | 管理库的对象关系映射 |
+| 配置管理 | pydantic-settings | 类型安全的 .env 配置 |
+| LLM 集成 | LangChain + OpenAI SDK | 统一的 LLM 调用抽象 |
+| 向量数据库 | ChromaDB | 历史查询的向量存储与相似检索 |
+| 缓存 | Redis | Schema 缓存（TTL 1 小时）|
+| 文本嵌入 | sentence-transformers | 将自然语言问题转为 384 维向量 |
+| 认证 | python-jose (JWT) | 无状态令牌认证 |
+| 数据库驱动 | mysql-connector-python / psycopg2 | 连接用户目标数据库 |
 
 ---
 
@@ -259,132 +298,6 @@
 
 ---
 
-## Schema 智能解析系统（语义层）
-
-系统通过**三层信息叠加**来理解数据库表和字段的含义，从浅到深逐层增强：
-
-### 信息层次
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                  Schema 信息层次                                   │
-│                                                                   │
-│  第三层：语义层（用户自定义）                                       │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │  表描述："orders = 订单主表，记录每笔订单的完整信息"          │   │
-│  │  字段描述："status = 订单状态：pending(待支付)/              │   │
-│  │             completed(已完成)/cancelled(已取消)"            │   │
-│  └───────────────────────────────────────────────────────────┘   │
-│                         ▲ 覆盖优先级最高                           │
-│                                                                   │
-│  第二层：数据库元信息（COMMENT / 约束）                             │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │  MySQL: SHOW FULL COLUMNS → COMMENT 列                     │   │
-│  │  PostgreSQL: pg_catalog.col_description()                   │   │
-│  │  information_schema 查询 → PRIMARY KEY / FOREIGN KEY       │   │
-│  │  NOT NULL / DEFAULT → 约束信息                              │   │
-│  └───────────────────────────────────────────────────────────┘   │
-│                         ▲ 自动提取                                │
-│                                                                   │
-│  第一层：字段名 + 类型（基础）                                     │
-│  ┌───────────────────────────────────────────────────────────┐   │
-│  │  DESCRIBE table / information_schema.columns               │   │
-│  │  仅获知字段名和数据类型                                      │   │
-│  └───────────────────────────────────────────────────────────┘   │
-│                         ▲ 原始数据                                │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### 数据库 COMMENT 自动提取
-
-系统在每次查询时会连接到用户数据库，自动提取两类 COMMENT：
-
-**字段 COMMENT**：
-- MySQL：执行 `SHOW FULL COLUMNS FROM table`，读取第 9 列 Comment 字段
-- PostgreSQL：调用 `pg_catalog.col_description()` 获取字段注释
-
-**表 COMMENT**：
-- MySQL：查询 `information_schema.tables` 的 `TABLE_COMMENT` 列
-- PostgreSQL：调用 `obj_description(pg_class.oid)` 获取表注释
-
-提取结果通过以下优先级合并到 Schema 中（高到低）：
-
-```
-用户自定义语义层描述  >  数据库 COMMENT 注释  >  (空，LLM 凭字段名推断)
-```
-
-建表示例：
-
-```sql
--- MySQL 示例建表
-CREATE TABLE orders (
-    id INT PRIMARY KEY COMMENT '订单ID',
-    user_id INT NOT NULL COMMENT '用户ID，关联users表',
-    total_amount DECIMAL(10,2) COMMENT '订单总金额（含税）',
-    status VARCHAR(20) DEFAULT 'pending' COMMENT '订单状态: pending/completed/cancelled',
-    created_at TIMESTAMP COMMENT '创建时间'
-) COMMENT='订单主表';
-```
-
-系统会自动读取 COMMENT 并填入 schema 的「说明」列。
-
-### 样本数据自动采集
-
-系统会为每个表抓取 3 行样本数据，LLM 由此获知：
-
-- 字段的实际数据格式（日期格式、数值范围）
-- 枚举字段的可能取值（如 `status = 'completed'`）
-- 数据之间的关联模式
-
-### 用户自定义语义层
-
-用户可以通过 API 或前端为表和字段添加中文说明，覆盖数据库 COMMENT。
-
-API 端点：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/{ds_id}/all-tables` | 列出数据源所有表 |
-| GET | `/{ds_id}/semantic/tables` | 获取表描述列表 |
-| POST | `/{ds_id}/semantic/tables` | 创建/更新表描述 |
-| DELETE | `/{ds_id}/semantic/tables/{table_name}` | 删除表描述（级联字段） |
-| GET | `/{ds_id}/semantic/fields?table_name=x` | 获取字段描述列表 |
-| POST | `/{ds_id}/semantic/fields` | 创建/更新字段描述 |
-| PUT | `/{ds_id}/semantic/fields/{field_id}` | 更新字段描述 |
-| DELETE | `/{ds_id}/semantic/fields/{field_id}` | 删除字段描述 |
-| POST | `/{ds_id}/semantic/import` | 批量导入语义描述 |
-| GET | `/{ds_id}/semantic/export` | 导出全部语义描述 |
-
-### LLM 收到的完整 Schema 示例
-
-经过三层叠加后，LLM 收到的 schema 格式如下：
-
-```
-═══════════════════════════════════════
-表名: orders
-表说明: 订单主表，记录每笔订单的完整信息
-主键: id
-外键:
-  user_id -> users.id
-
-字段名                 类型                  约束                       说明
-------------------------------------------------------------------------------------------
-id                    int                  PK, NOT NULL              订单ID
-user_id               int                  NOT NULL, FK→users.id     用户ID
-total_amount          decimal(10,2)        NOT NULL                  订单总金额（含税）
-status                varchar(20)          默认=pending               订单状态: pending/completed/cancelled
-created_at            timestamp            NOT NULL                  创建时间
-
-【orders 示例数据 (3行)】
-  id | user_id | total_amount | status | created_at
-  ----------------------------------------
-  1 | 100 | 299.99 | completed | 2025-01-15T10:30:00
-  2 | 101 | 599.5 | pending | 2025-01-16T14:20:00
-  3 | 100 | 129.0 | cancelled | 2025-01-17T09:00:00
-```
-
----
-
 ## 项目结构
 
 ```
@@ -393,6 +306,7 @@ backend/
 ├── main.py                          # FastAPI 应用入口，注册中间件和路由
 ├── requirements.txt                 # Python 依赖
 ├── Dockerfile                       # Docker 镜像构建文件
+├── docker-compose.yml              # Docker Compose 编排文件
 ├── .env                             # 环境变量（API Key、数据库地址等）
 │
 └── app/                             # 应用主目录
@@ -474,16 +388,7 @@ backend/
 | GET | `/{id}/tables` | 获取已选数据表 | 是 |
 | POST | `/{id}/tables` | 选择数据表 | 是 |
 | GET | `/{id}/selected-tables` | 查看已选表列表 | 是 |
-
-### 查询接口 `/api/v1/text-to-sql`
-
-| 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| POST | `/query` | 自然语言查询 → 生成 SQL → 执行 | 是 |
-| GET | `/history` | 查询历史列表（支持按数据源过滤） | 是 |
-| GET | `/history/{id}` | 查询历史详情 | 是 |
-| DELETE | `/history/{id}` | 删除查询历史 | 是 |
-| GET | `/similar` | 获取相似历史查询 | 是 |
+| GET | `/{id}/all-tables` | 浏览数据源所有表 | 是 |
 
 #### `POST /query` 请求示例
 
@@ -573,29 +478,6 @@ backend/
 | error_message | Text | 错误信息 |
 | created_at | DateTime | 创建时间 |
 
-### TableDescriptions (表描述)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | String(36) | UUID 主键 |
-| data_source_id | String(36) | 关联数据源 |
-| table_name | String(100) | 表名，同一数据源下唯一 |
-| description | Text | 用户自定义的表中文说明 |
-| created_at | DateTime | 创建时间 |
-| updated_at | DateTime | 更新时间 |
-
-### FieldDescriptions (字段描述)
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | String(36) | UUID 主键 |
-| data_source_id | String(36) | 关联数据源 |
-| table_name | String(100) | 所属表名 |
-| field_name | String(100) | 字段名 |
-| description | Text | 用户自定义的字段中文说明 |
-| created_at | DateTime | 创建时间 |
-| updated_at | DateTime | 更新时间 |
-
 ---
 
 ## 配置说明
@@ -619,7 +501,7 @@ backend/
 | `chroma_host` | `localhost` | ChromaDB 地址 |
 | `chroma_port` | `8000` | ChromaDB 端口 |
 | `chroma_use_remote` | `false` | 是否使用远程 ChromaDB |
-| `admin_db_url` | `mysql+mysqlconnector://text2sql:text2sql123@localhost:3306/text2sql_admin` | MySQL 管理数据库 URL |
+| `admin_db_url` | `mysql+mysqlconnector://...` | MySQL 管理数据库 URL |
 | `secret_key` | - | JWT 签名密钥 |
 | `algorithm` | `HS256` | JWT 算法 |
 | `access_token_expire_minutes` | `30` | Token 有效期（分钟） |
@@ -628,7 +510,7 @@ backend/
 
 ---
 
-## 快速开始
+## 环境配置
 
 ### 前置条件
 
@@ -646,12 +528,42 @@ pip install -r requirements.txt
 
 ### 2. 配置环境变量
 
+创建 `.env` 文件：
+
 ```bash
-cp .env.example .env    # 如果有模板文件
-# 编辑 .env，至少配置：
-#   LLM_API_KEY=your-key
-#   LLM_API_BASE=https://api.deepseek.com/v1
-#   LLM_MODEL=deepseek-chat
+# 应用配置
+APP_NAME=text2sql-service
+APP_HOST=0.0.0.0
+APP_PORT=8000
+DEBUG=true
+
+# LLM 配置（必需）
+LLM_API_KEY=your-deepseek-api-key
+LLM_API_BASE=https://api.deepseek.com/v1
+LLM_MODEL=deepseek-chat
+LLM_TEMPERATURE=0.1
+
+# Redis 配置（可选）
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+
+# ChromaDB 配置（可选）
+CHROMA_HOST=localhost
+CHROMA_PORT=8000
+CHROMA_USE_REMOTE=false
+
+# 数据库配置
+ADMIN_DB_URL=mysql+mysqlconnector://text2sql:text2sql123@localhost:3306/text2sql_admin
+
+# JWT 配置
+SECRET_KEY=your-secret-key-change-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# 安全配置
+SENSITIVE_FIELDS=password,token,secret,salt,api_key
+MAX_RESULTS=1000
 ```
 
 ### 3. 启动 Redis（可选）
@@ -670,19 +582,27 @@ redis-server
 docker run -d --name chromadb -p 8001:8000 chromadb/chroma:latest
 ```
 
-### 5. 启动服务
+---
+
+## 快速开始
+
+### 方式一：本地启动
 
 ```bash
+# 1. 安装依赖
+pip install -r requirements.txt
+
+# 2. 配置环境变量
+cp .env.example .env  # 如果有模板文件
+# 编辑 .env，填入配置
+
+# 3. 启动服务
 python main.py
 ```
 
 服务启动后自动创建 SQLite 管理数据库，访问 `http://localhost:8000/docs` 查看 API 文档。
 
----
-
-## Docker 部署
-
-使用 `docker-compose` 一键启动完整环境（后端 + Redis + ChromaDB + MySQL）：
+### 方式二：Docker 部署
 
 ```bash
 # 在项目根目录
@@ -697,6 +617,156 @@ docker-compose up -d
 | redis | 6379 | Redis 缓存 |
 | chromadb | 8001 | ChromaDB 向量数据库 |
 | mysql | 3306 | MySQL 管理数据库 + 示例业务数据库 |
+
+---
+
+## 测试方法
+
+### 1. 单元测试
+
+使用 pytest 进行单元测试：
+
+```bash
+# 安装测试依赖
+pip install pytest pytest-asyncio httpx
+
+# 运行测试
+pytest tests/ -v
+
+# 运行特定测试文件
+pytest tests/test_auth.py -v
+
+# 运行特定测试用例
+pytest tests/test_auth.py::test_login -v
+```
+
+### 2. 集成测试
+
+```bash
+# 运行集成测试
+python test_integration.py
+```
+
+### 3. API 手动测试
+
+启动服务后，使用 curl 或 Swagger UI 测试：
+
+```bash
+# 健康检查
+curl http://localhost:8000/health
+
+# 用户注册
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test","email":"test@example.com","password":"test123"}'
+
+# 用户登录
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test","password":"test123"}'
+
+# 创建数据源
+curl -X POST http://localhost:8000/api/v1/data-sources \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"test","type":"mysql","host":"localhost","port":3306,"database":"test","username":"root","password":"password"}'
+```
+
+### 4. 性能测试
+
+使用 Apache Bench 或 wrk：
+
+```bash
+# 简单性能测试
+ab -n 100 -c 10 http://localhost:8000/health
+
+# 或使用 wrk
+wrk -t10 -c100 -d30s http://localhost:8000/health
+```
+
+---
+
+## Docker 部署
+
+### docker-compose.yml 结构
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_API_BASE=${LLM_API_BASE}
+      - REDIS_HOST=redis
+      - CHROMA_HOST=chromadb
+    depends_on:
+      - mysql
+      - redis
+      - chromadb
+    networks:
+      - text2sql-network
+
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=text2sql_admin
+      - MYSQL_USER=text2sql
+      - MYSQL_PASSWORD=text2sql123
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - text2sql-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - text2sql-network
+
+  chromadb:
+    image: chromadb/chroma:latest
+    ports:
+      - "8001:8000"
+    networks:
+      - text2sql-network
+
+volumes:
+  mysql-data:
+
+networks:
+  text2sql-network:
+    driver: bridge
+```
+
+### 启动步骤
+
+```bash
+# 1. 构建并启动所有服务
+docker-compose up -d
+
+# 2. 查看服务状态
+docker-compose ps
+
+# 3. 查看日志
+docker-compose logs -f backend
+
+# 4. 初始化数据库（首次）
+docker-compose exec mysql mysql -uroot -prootpassword -e "CREATE DATABASE IF NOT EXISTS text2sql_demo;"
+
+# 5. 停止服务
+docker-compose down
+
+# 6. 完全清理
+docker-compose down -v
+```
 
 ---
 
@@ -729,6 +799,376 @@ XP_*, SP_*
 - 查询历史按用户隔离
 - JWT Token 认证所有 API
 
+### 5. SQL 注入防护
+
+- 参数化查询，所有 SQL 执行使用参数绑定
+- 标识符白名单验证（表名、列名只允许字母数字下划线）
+
+---
+
+## 维护指南
+
+### 1. 日志管理
+
+#### 查看日志
+
+```bash
+# 实时查看后端日志
+tail -f logs/app.log
+
+# 查看最近 100 行
+tail -n 100 logs/app.log
+
+# 按日期查看
+grep "2025-01-15" logs/app.log
+```
+
+#### 日志配置
+
+在 `.env` 中配置日志级别：
+
+```env
+LOG_LEVEL=INFO
+LOG_FILE=logs/app.log
+```
+
+### 2. 性能监控
+
+#### 监控指标
+
+- **响应时间**：使用 FastAPI 内置中间件记录
+- **错误率**：监控 500 错误的比例
+- **数据库连接池**：检查活动连接数
+
+#### 监控工具
+
+```bash
+# 使用 Prometheus（待集成）
+curl http://localhost:8000/metrics
+
+# 使用 statsd（待集成）
+```
+
+### 3. 缓存管理
+
+#### Redis 缓存
+
+```bash
+# 连接到 Redis
+redis-cli
+
+# 查看所有键
+KEYS *
+
+# 查看 Schema 缓存
+KEYS schema:*
+
+# 清除所有缓存
+FLUSHDB
+
+# 清除 Schema 缓存
+KEYS schema:* | xargs DEL
+
+# 查看缓存 TTL
+TTL schema:<ds_id>
+
+# 设置缓存 TTL（秒）
+EXPIRE schema:<ds_id> 3600
+```
+
+#### ChromaDB 清理
+
+```bash
+# 删除指定用户的历史查询
+# 在代码中调用 vector_store.clear_user_queries(user_id)
+
+# 删除所有历史查询
+# 在代码中调用 vector_store.delete_collection()
+```
+
+### 4. 数据库维护
+
+#### MySQL 管理
+
+```bash
+# 连接到 MySQL
+mysql -h localhost -u text2sql -p text2sql_admin
+
+# 查看表
+SHOW TABLES;
+
+# 查看查询历史
+SELECT * FROM query_histories ORDER BY created_at DESC LIMIT 10;
+
+# 清理旧查询历史（30天前）
+DELETE FROM query_histories WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);
+
+# 优化表
+OPTIMIZE TABLE query_histories;
+```
+
+### 5. 备份与恢复
+
+#### 数据库备份
+
+```bash
+# 备份管理数据库
+mysqldump -h localhost -u text2sql -p text2sql_admin > backup_$(date +%Y%m%d).sql
+
+# 备份所有数据库
+mysqldump -h localhost -u root -p --all-databases > all_backup_$(date +%Y%m%d).sql
+```
+
+#### 恢复数据库
+
+```bash
+mysql -h localhost -u text2sql -p text2sql_admin < backup_20250115.sql
+```
+
+### 6. 依赖更新
+
+```bash
+# 查看可更新依赖
+pip list --outdated
+
+# 更新特定依赖
+pip install --upgrade langchain
+
+# 更新所有依赖
+pip freeze > requirements.txt
+```
+
+### 7. 扩展部署
+
+#### 水平扩展
+
+```yaml
+# docker-compose.yml
+services:
+  backend:
+    # ...
+    deploy:
+      replicas: 3
+```
+
+#### 负载均衡
+
+在 `nginx.conf` 中配置：
+
+```nginx
+upstream backend {
+    server backend1:8000;
+    server backend2:8000;
+    server backend3:8000;
+}
+
+server {
+    location / {
+        proxy_pass http://backend;
+    }
+}
+```
+
+---
+
+## 故障排查
+
+### 常见问题
+
+#### 1. 启动失败
+
+**症状**：`python main.py` 执行报错
+
+**排查步骤**：
+
+1. 检查 Python 版本：`python --version`（需要 3.8+）
+2. 检查依赖安装：`pip list`
+3. 检查端口占用：`lsof -i :8000`
+4. 查看详细错误日志
+
+**解决方案**：
+
+```bash
+# 确保 Python 版本正确
+python3 --version
+
+# 重新安装依赖
+pip install -r requirements.txt
+
+# 安装缺失的依赖
+pip install <missing-package>
+
+# 杀掉占用端口的进程
+kill -9 $(lsof -t -i:8000)
+```
+
+#### 2. LLM 调用失败
+
+**症状**：`Error communicating with LLM` 或超时
+
+**排查步骤**：
+
+1. 确认 API Key 配置正确
+2. 检查网络连接
+3. 查看后端日志中的详细错误
+
+**解决方案**：
+
+```bash
+# 检查 API Key
+echo $LLM_API_KEY
+
+# 测试 API 连接
+curl -X POST https://api.deepseek.com/v1/chat/completions \
+  -H "Authorization: Bearer $LLM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"test"}]}'
+
+# 检查网络代理
+echo $HTTP_PROXY
+echo $HTTPS_PROXY
+```
+
+#### 3. 数据库连接失败
+
+**症状**：`Can't connect to MySQL server` 或 `Connection refused`
+
+**排查步骤**：
+
+1. 确认 MySQL 服务运行中
+2. 检查连接信息（主机、端口、用户名、密码）
+3. 检查防火墙设置
+4. 查看 MySQL 日志
+
+**解决方案**：
+
+```bash
+# 检查 MySQL 状态
+docker-compose ps mysql
+# 或
+systemctl status mysql
+
+# 测试连接
+mysql -h localhost -u text2sql -p -e "SHOW DATABASES;"
+
+# 查看 MySQL 错误日志
+docker-compose logs mysql
+# 或
+tail -n 100 /var/log/mysql/error.log
+
+# 授权用户（如果需要）
+docker-compose exec mysql mysql -uroot -p
+CREATE USER 'text2sql'@'%' IDENTIFIED BY 'text2sql123';
+GRANT ALL PRIVILEGES ON text2sql_admin.* TO 'text2sql'@'%';
+FLUSH PRIVILEGES;
+```
+
+#### 4. Redis 连接失败
+
+**症状**：`Connection refused` 或 `ECONNREFUSED`
+
+**排查步骤**：
+
+1. 确认 Redis 服务运行中
+2. 检查配置的主机和端口
+3. 测试连接
+
+**解决方案**：
+
+```bash
+# 检查 Redis 状态
+docker-compose ps redis
+redis-cli ping
+
+# 查看 Redis 日志
+docker-compose logs redis
+
+# 启动 Redis（如果未使用 Docker）
+redis-server
+```
+
+#### 5. ChromaDB 连接失败
+
+**症状**：`Connection refused` 或向量检索失败
+
+**排查步骤**：
+
+1. 确认 ChromaDB 服务运行中
+2. 检查配置的主机和端口
+3. 测试 API
+
+**解决方案**：
+
+```bash
+# 检查 ChromaDB 状态
+docker-compose ps chromadb
+
+# 测试 ChromaDB API
+curl http://localhost:8001/api/v1/heartbeat
+
+# 查看 ChromaDB 日志
+docker-compose logs chromadb
+```
+
+#### 6. 内存占用过高
+
+**症状**：`MemoryError` 或系统变慢
+
+**排查步骤**：
+
+1. 检查 Python 进程内存占用
+2. 查看日志中的内存警告
+3. 检查数据量
+
+**解决方案**：
+
+```bash
+# 查看进程内存占用
+ps aux | grep python
+
+# 优化方案
+# 1. 增加 LIMIT 限制
+# 2. 清理查询历史
+# 3. 重启服务
+docker-compose restart backend
+
+# 4. 增加内存限制
+docker-compose update --memory=2g backend
+```
+
+### 调试技巧
+
+#### 1. 启用调试模式
+
+在 `.env` 中设置：
+
+```env
+DEBUG=true
+LOG_LEVEL=DEBUG
+```
+
+#### 2. 使用 Python 调试器
+
+```python
+import pdb
+
+def some_function():
+    pdb.set_trace()
+    # 调试代码
+```
+
+#### 3. 查看 FastAPI 请求日志
+
+FastAPI 默认记录所有请求，可在 `main.py` 中配置详细日志。
+
+#### 4. 数据库查询调试
+
+```python
+# 启用 SQLAlchemy 查询日志
+import logging
+logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+```
+
 ---
 
 ## 依赖说明
@@ -750,3 +1190,16 @@ XP_*, SP_*
 | sentence-transformers | 文本向量嵌入模型 |
 | sqlglot | SQL 解析与格式化 |
 | python-dotenv | 环境变量加载 |
+
+---
+
+## 许可证
+
+MIT License
+
+---
+
+## 联系方式
+
+- GitHub Issues：[项目 Issues]
+- 技术讨论：[Discussions]
