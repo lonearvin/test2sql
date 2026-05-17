@@ -68,9 +68,9 @@ graph TB
     end
 
     subgraph Data["数据层"]
-        Redis[(Redis<br/>缓存)]
-        MySQL[(MySQL<br/>管理库)]
-        ChromaDB[(ChromaDB<br/>向量)]
+        Redis{{"Redis<br/>缓存"}}
+        MySQL{{"MySQL<br/>管理库"}}
+        ChromaDB{{"ChromaDB<br/>向量"}}
     end
 
     subgraph LLM["外部服务"]

@@ -90,9 +90,9 @@ graph TB
     end
 
     subgraph Data_Storage["数据存储层"]
-        MySQL[("MySQL<br/>text2sql_admin<br/>管理库")]
-        Redis[("Redis<br/>Schema 缓存<br/>TTL=3600s")]
-        ChromaDB[("ChromaDB<br/>向量存储<br/>query_history")]
+        MySQL{{"MySQL<br/>text2sql_admin<br/>管理库"}}
+        Redis{{"Redis<br/>Schema 缓存<br/>TTL=3600s"}}
+        ChromaDB{{"ChromaDB<br/>向量存储<br/>query_history"}}
     end
 
     subgraph External["外部服务"]
@@ -321,8 +321,8 @@ flowchart TD
     AddLimit --> Pass
     LowerLimit --> Pass
 
-    Pass --> Execute[🚀 执行 SQL]
-    Reject1 & Reject2 --> End(["结束"])
+    Pass --> Execute[执行 SQL]
+    Reject1 & Reject2 --> EndNode([结束])
 
     style Reject1 fill:#ffebee,color:#c62828
     style Reject2 fill:#ffebee,color:#c62828
@@ -748,25 +748,25 @@ wrk -t10 -c100 -d30s http://localhost:8000/health
 
 ```mermaid
 graph TB
-    subgraph Internet["🌐 Internet"]
+    subgraph Internet["Internet"]
         Users[用户浏览器]
     end
 
-    subgraph Gateway["🚪 网关层"]
+    subgraph Gateway["网关层"]
         Nginx[Nginx<br/>负载均衡<br/>静态资源]
     end
 
-    subgraph Frontend["💻 前端层"]
+    subgraph Frontend["前端层"]
         ViteDev[Vite Dev<br/>开发环境]
         ViteProd[静态资源<br/>生产环境]
     end
 
-    subgraph Backend["⚙️ 后端层"]
+    subgraph Backend["后端层"]
         FastAPI[FastAPI<br/>端口 8000]
         Uvicorn[Uvicorn<br/>ASGI 服务器]
     end
 
-    subgraph Infrastructure["🗄️ 基础设施"]
+    subgraph Infrastructure["基础设施"]
         subgraph Containers["容器服务"]
             MySQL[MySQL 8.0<br/>端口 3306]
             Redis[Redis 7<br/>端口 6379]
@@ -774,11 +774,11 @@ graph TB
         end
 
         subgraph Storage["数据卷"]
-            MySQLVolume["📦 mysql-data"]
+            MySQLVolume["mysql-data"]
         end
     end
 
-    subgraph External["🌍 外部服务"]
+    subgraph External["外部服务"]
         DeepSeekAPI[DeepSeek API]
         TargetDB[目标数据库<br/>MySQL/PG]
     end

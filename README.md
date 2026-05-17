@@ -79,9 +79,9 @@ graph TB
     end
 
     subgraph Data_Storage["数据存储层"]
-        Redis[("Redis<br/>Schema 缓存<br/>TTL=3600s")]
-        MySQL[("MySQL<br/>text2sql_admin<br/>管理库")]
-        ChromaDB[("ChromaDB<br/>向量存储<br/>HNSW+Cosine")]
+        Redis{{"Redis<br/>Schema 缓存<br/>TTL=3600s"}}
+        MySQL{{"MySQL<br/>text2sql_admin<br/>管理库"}}
+        ChromaDB{{"ChromaDB<br/>向量存储<br/>HNSW+Cosine"}}
     end
 
     subgraph External["外部服务"]
@@ -111,6 +111,7 @@ graph TB
     style Backend fill:#f3e5f5,color:#4a148c
     style Data_Storage fill:#e8f5e9,color:#1b5e20
     style External fill:#fff3e0,color:#e65100
+```
 
 ## 前后端关系
 
