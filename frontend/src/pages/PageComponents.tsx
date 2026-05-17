@@ -153,6 +153,7 @@ export const RegisterPage: React.FC<{ onNavigate: (page: string) => void }> = ({
 export const SettingsPage: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
 
   const tabs = [
     { id: 'profile', label: '个人信息', icon: <User className="w-4 h-4" /> },
@@ -296,31 +297,33 @@ export const SettingsPage: React.FC = () => {
                   <div className="flex gap-3">
                     <button 
                       onClick={() => {
+                        setTheme('light');
                         localStorage.setItem('theme', 'light');
-                        window.location.reload();
+                        document.documentElement.classList.remove('dark');
                       }}
                       className={`flex-1 p-4 rounded-xl text-center transition-all ${
-                        localStorage.getItem('theme') !== 'dark' 
+                        theme === 'light'
                           ? 'bg-white border-2 border-blue-500' 
                           : 'bg-gray-100 border-2 border-transparent hover:border-gray-300'
                       }`}
                     >
                       <div className="w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200" />
-                      <span className={`text-sm ${localStorage.getItem('theme') !== 'dark' ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>浅色</span>
+                      <span className={`text-sm ${theme === 'light' ? 'text-gray-800 font-medium' : 'text-gray-600'}`}>浅色</span>
                     </button>
                     <button 
                       onClick={() => {
+                        setTheme('dark');
                         localStorage.setItem('theme', 'dark');
-                        window.location.reload();
+                        document.documentElement.classList.add('dark');
                       }}
                       className={`flex-1 p-4 rounded-xl text-center transition-all ${
-                        localStorage.getItem('theme') === 'dark' 
+                        theme === 'dark'
                           ? 'bg-gray-800 border-2 border-blue-500' 
                           : 'bg-gray-100 border-2 border-transparent hover:border-gray-300'
                       }`}
                     >
                       <div className="w-8 h-8 mx-auto mb-2 rounded-lg bg-gradient-to-br from-gray-800 to-gray-900" />
-                      <span className={`text-sm ${localStorage.getItem('theme') === 'dark' ? 'text-white font-medium' : 'text-gray-600'}`}>深色</span>
+                      <span className={`text-sm ${theme === 'dark' ? 'text-white font-medium' : 'text-gray-600'}`}>深色</span>
                     </button>
                   </div>
                 </div>

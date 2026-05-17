@@ -98,8 +98,27 @@ const DatasourcePage: React.FC = () => {
 
   const handleSelectTables = async (dataSource: DataSource) => {
     setCurrentDataSource(dataSource);
-    setAvailableTables(['users', 'orders', 'products', 'categories', 'order_items', 'reviews', 'payments']);
-    setSelectedTables([]);
+    setIsLoading(true);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const [tablesRes, selectedRes] = await Promise.all([
+        fetch(`${baseUrl}/data-sources/${dataSource.id}/all-tables`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${baseUrl}/data-sources/${dataSource.id}/selected-tables`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+      const tablesData = await tablesRes.json();
+      setAvailableTables(tablesData.tables || []);
+      const selectedData = await selectedRes.json();
+      setSelectedTables((selectedData || []).map((t: { table_name: string }) => t.table_name));
+    } catch (error) {
+      console.error('Failed to fetch tables:', error);
+      setAvailableTables([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSaveTables = async () => {
@@ -368,7 +387,26 @@ const DatasourcePage: React.FC = () => {
           </div>
         }
       >
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              {selectedTables.length} / {availableTables.length} 张表
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedTables.length === availableTables.length) {
+                  setSelectedTables([]);
+                } else {
+                  setSelectedTables([...availableTables]);
+                }
+              }}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              {selectedTables.length === availableTables.length ? '取消全选' : '全选'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
           {availableTables.map((table) => (
             <label
               key={table}
@@ -394,6 +432,7 @@ const DatasourcePage: React.FC = () => {
               <span className="text-gray-800 font-medium">{table}</span>
             </label>
           ))}
+          </div>
         </div>
       </Modal>
 

@@ -25,7 +25,8 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
-  if (token) {
+  const url = config.url || '';
+  if (token && !url.includes('/auth/login') && !url.includes('/auth/register')) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -35,9 +36,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+      const url = error.config?.url || '';
+      if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth:logout'));
+      }
     }
     return Promise.reject(error);
   }

@@ -1,6 +1,9 @@
--- Text-to-SQL Demo Database Initialization Script
+-- Text-to-SQL 初始化脚本
+-- text2sql_demo：示例业务数据库（供用户查询演练）
+-- text2sql_admin：系统管理数据库（用户、数据源配置、查询历史、语义层）
 
 CREATE DATABASE IF NOT EXISTS text2sql_demo;
+CREATE DATABASE IF NOT EXISTS text2sql_admin;
 USE text2sql_demo;
 
 -- Users Table

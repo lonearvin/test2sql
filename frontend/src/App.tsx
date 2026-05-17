@@ -25,7 +25,7 @@ const AppContent = ({ currentPage, onNavigate }: AppContentProps) => {
       case 'register':
         return <RegisterPage onNavigate={(page) => onNavigate(page as PageType)} />;
       case 'dashboard':
-        return <DashboardPage />;
+        return <DashboardPage onNavigate={onNavigate} />;
       case 'datasource':
         return <DatasourcePage />;
       case 'query':
@@ -68,6 +68,10 @@ const AppWithAuth = () => {
   }, [isAuthenticated, loading]);
 
   useEffect(() => {
+    const handleLogout = () => {
+      setCurrentPage('login');
+    };
+
     const handleStorageChange = () => {
       const token = localStorage.getItem('access_token');
       if (!token && currentPage !== 'login' && currentPage !== 'register') {
@@ -76,7 +80,11 @@ const AppWithAuth = () => {
     };
 
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('auth:logout', handleLogout);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('auth:logout', handleLogout);
+    };
   }, [currentPage]);
 
   if (loading) {
@@ -94,6 +102,15 @@ const AppWithAuth = () => {
 };
 
 const App = () => {
+  useEffect(() => {
+    const theme = localStorage.getItem('theme');
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <AppWithAuth />

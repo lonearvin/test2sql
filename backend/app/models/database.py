@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -61,8 +61,8 @@ class QueryHistory(Base):
     __tablename__ = "query_histories"
     
     id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    data_source_id = Column(String(36), ForeignKey("data_sources.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    data_source_id = Column(String(36), ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False)
     question = Column(Text, nullable=False)
     sql = Column(Text)
     result = Column(Text)
@@ -73,3 +73,38 @@ class QueryHistory(Base):
     
     user = relationship("User", back_populates="query_histories")
     data_source = relationship("DataSource", back_populates="query_histories")
+
+
+class TableDescription(Base):
+    __tablename__ = "table_descriptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    data_source_id = Column(String(36), ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False)
+    table_name = Column(String(100), nullable=False)
+    description = Column(Text, default='')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('data_source_id', 'table_name', name='uq_table_desc_ds_table'),
+    )
+
+    data_source = relationship("DataSource", backref="table_descriptions")
+
+
+class FieldDescription(Base):
+    __tablename__ = "field_descriptions"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    data_source_id = Column(String(36), ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False)
+    table_name = Column(String(100), nullable=False)
+    field_name = Column(String(100), nullable=False)
+    description = Column(Text, default='')
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('data_source_id', 'table_name', 'field_name', name='uq_field_desc_ds_table_field'),
+    )
+
+    data_source = relationship("DataSource", backref="field_descriptions")

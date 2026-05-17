@@ -32,17 +32,18 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initAuth = async () => {
+    const initAuth = () => {
       const storedToken = localStorage.getItem('access_token');
       const storedUser = localStorage.getItem('user');
       
       if (storedToken && storedUser) {
-        setToken(storedToken);
         try {
           const userData = JSON.parse(storedUser);
           setUser(userData);
+          setToken(storedToken);
         } catch {
           localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
         }
       }
       setLoading(false);

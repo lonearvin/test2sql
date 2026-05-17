@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     chroma_use_remote: bool = False
     vector_db_path: str = "./data/vector_db"
     
-    admin_db_url: str = "sqlite:///./text2sql_admin.db"
+    admin_db_url: str = "mysql+mysqlconnector://text2sql:text2sql123@localhost:3306/text2sql_admin"
     
     secret_key: str = "your-secret-key"
     algorithm: str = "HS256"

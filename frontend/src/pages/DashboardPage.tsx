@@ -8,9 +8,6 @@ import {
   Zap, 
   ArrowRight,
   Plus,
-  Users,
-  ShoppingCart,
-  Package,
   CheckCircle,
   XCircle,
 } from 'lucide-react';
@@ -46,7 +43,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, trend })
   );
 };
 
-export const DashboardPage = () => {
+export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => void }) => {
   const { token, user } = useAuth();
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [recentQueries, setRecentQueries] = useState<QueryHistory[]>([]);
@@ -92,7 +89,7 @@ export const DashboardPage = () => {
           <h1 className="text-3xl font-bold text-gray-800">仪表盘</h1>
           <p className="text-gray-500 mt-1">欢迎回来，{user?.username}！查看您的数据概览</p>
         </div>
-        <Button icon={<Plus className="w-5 h-5" />}>
+        <Button icon={<Plus className="w-5 h-5" />} onClick={() => onNavigate('datasource')}>
           添加数据源
         </Button>
       </div>
@@ -199,6 +196,7 @@ export const DashboardPage = () => {
                 variant="ghost" 
                 className="bg-white text-blue-600 hover:bg-blue-50"
                 icon={<ArrowRight className="w-4 h-4" />}
+                onClick={() => onNavigate('query')}
               >
                 立即体验
               </Button>
@@ -245,39 +243,48 @@ export const DashboardPage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+        <button
+          onClick={() => onNavigate('query')}
+          className="text-left bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 hover:shadow-lg hover:border-blue-300 transition-all cursor-pointer"
+        >
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-              <Users className="w-6 h-6 text-blue-600" />
+              <Zap className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">用户管理</h4>
-              <p className="text-sm text-gray-600">管理系统用户和权限</p>
+              <h4 className="font-semibold text-gray-800 mb-1">智能查询</h4>
+              <p className="text-sm text-gray-600">用自然语言向数据提问</p>
             </div>
           </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+        </button>
+        <button
+          onClick={() => onNavigate('datasource')}
+          className="text-left bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-2xl p-6 hover:shadow-lg hover:border-green-300 transition-all cursor-pointer"
+        >
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
-              <ShoppingCart className="w-6 h-6 text-green-600" />
+              <Database className="w-6 h-6 text-green-600" />
             </div>
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">订单分析</h4>
-              <p className="text-sm text-gray-600">分析销售订单数据</p>
+              <h4 className="font-semibold text-gray-800 mb-1">数据源管理</h4>
+              <p className="text-sm text-gray-600">配置和管理数据库连接</p>
             </div>
           </div>
-        </Card>
-        <Card className="bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200">
+        </button>
+        <button
+          onClick={() => onNavigate('query')}
+          className="text-left bg-gradient-to-br from-purple-50 to-fuchsia-50 border border-purple-200 rounded-2xl p-6 hover:shadow-lg hover:border-purple-300 transition-all cursor-pointer"
+        >
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
-              <Package className="w-6 h-6 text-orange-600" />
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center flex-shrink-0">
+              <FileText className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <h4 className="font-semibold text-gray-800 mb-1">产品库存</h4>
-              <p className="text-sm text-gray-600">查看产品库存状态</p>
+              <h4 className="font-semibold text-gray-800 mb-1">查询历史</h4>
+              <p className="text-sm text-gray-600">查看历史查询和结果</p>
             </div>
           </div>
-        </Card>
+        </button>
       </div>
     </div>
   );

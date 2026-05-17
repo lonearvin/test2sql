@@ -16,11 +16,12 @@ services:
       - REDIS_PORT=6379
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
-      - ADMIN_DB_URL=sqlite:///./text2sql_admin.db
+      - ADMIN_DB_URL=mysql+mysqlconnector://text2sql:text2sql123@mysql:3306/text2sql_admin
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production}
     depends_on:
       - redis
       - chromadb
+      - mysql
     volumes:
       - ./backend:/app
     networks:

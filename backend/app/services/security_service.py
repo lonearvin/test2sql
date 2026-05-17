@@ -1,29 +1,56 @@
 import re
+import json
 from typing import List, Tuple
 from app.config.settings import settings
 
+
 class SecurityService:
-    FORBIDDEN_KEYWORDS = [
-        'DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'CREATE',
-        'INSERT', 'UPDATE', 'GRANT', 'REVOKE', 'EXEC',
-        'EXECUTE', 'XP_', 'SP_'
+    """
+    双防线 SQL 安全校验：
+    第一层 — 规则预筛（零延迟）：快速扫描明显的危险关键字
+    第二层 — LLM 语义分析（高精度）：由 LLM 判断是否包含表数据修改操作
+    """
+
+    DANGEROUS_KEYWORDS = [
+        'DROP', 'TRUNCATE', 'ALTER', 'CREATE',
+        'GRANT', 'REVOKE', 'EXEC', 'EXECUTE',
+        'XP_', 'SP_',
+    ]
+
+    MODIFY_KEYWORDS_HINT = [
+        'INSERT', 'UPDATE', 'DELETE',
     ]
 
     SENSITIVE_FIELDS = ['password', 'token', 'secret', 'salt', 'api_key']
 
+    def __init__(self):
+        self._llm_client = None
+
+    @property
+    def llm_client(self):
+        if self._llm_client is None:
+            from app.infrastructure.llm_client import llm_client
+            self._llm_client = llm_client
+        return self._llm_client
+
     def validate_sql(self, sql: str) -> Tuple[bool, str]:
+        """
+        双防线 SQL 安全校验。
+
+        返回 (is_safe, reason)
+        """
         sql_clean = self._remove_comments(sql)
         sql_upper = sql_clean.upper().strip()
 
-        if not sql_upper.startswith('SELECT'):
-            return False, "只允许执行SELECT查询"
-
-        for keyword in self.FORBIDDEN_KEYWORDS:
+        # ========== 第一层：规则预筛（零延迟） ==========
+        for keyword in self.DANGEROUS_KEYWORDS:
             pattern = r'\b' + keyword + r'\b'
             if re.search(pattern, sql_upper):
-                return False, f"SQL包含禁止的关键字: {keyword}"
+                return False, f"SQL包含高危关键字: {keyword}"
 
-        return True, ""
+        # ========== 第二层：LLM 语义分析 ==========
+        is_safe, reason = self.llm_client.analyze_sql_safety(sql)
+        return is_safe, reason
 
     def _remove_comments(self, sql: str) -> str:
         sql = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
@@ -71,5 +98,6 @@ class SecurityService:
             masked_results.append(masked_row)
 
         return masked_results
+
 
 security_service = SecurityService()

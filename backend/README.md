@@ -74,12 +74,13 @@
           ┌──────────────────────┼──────────────────────┐
           ▼                      ▼                      ▼
 ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-│    SQLite        │ │     Redis        │ │    ChromaDB      │
-│  (text2sql_admin │ │  (缓存层)        │ │  (向量存储)       │
-│     .db)         │ │  ─────────────── │ │  ───────────────  │
+│     Docker       │ │     Redis        │ │    ChromaDB      │
+│     MySQL        │ │  (缓存层)        │ │  (向量存储)       │
+│  (管理数据库)     │ │  ─────────────── │ │  ───────────────  │
 │  ─────────────── │ │  Schema 缓存     │ │  查询向量索引     │
 │  用户 / 数据源    │ │  1 小时 TTL      │ │  相似度计算       │
 │  查询历史         │ │                  │ │                   │
+│  语义层描述       │ │                  │ │                   │
 └──────────────────┘ └──────────────────┘ └──────────────────┘
                                  │
                                  ▼
@@ -258,6 +259,132 @@
 
 ---
 
+## Schema 智能解析系统（语义层）
+
+系统通过**三层信息叠加**来理解数据库表和字段的含义，从浅到深逐层增强：
+
+### 信息层次
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                  Schema 信息层次                                   │
+│                                                                   │
+│  第三层：语义层（用户自定义）                                       │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │  表描述："orders = 订单主表，记录每笔订单的完整信息"          │   │
+│  │  字段描述："status = 订单状态：pending(待支付)/              │   │
+│  │             completed(已完成)/cancelled(已取消)"            │   │
+│  └───────────────────────────────────────────────────────────┘   │
+│                         ▲ 覆盖优先级最高                           │
+│                                                                   │
+│  第二层：数据库元信息（COMMENT / 约束）                             │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │  MySQL: SHOW FULL COLUMNS → COMMENT 列                     │   │
+│  │  PostgreSQL: pg_catalog.col_description()                   │   │
+│  │  information_schema 查询 → PRIMARY KEY / FOREIGN KEY       │   │
+│  │  NOT NULL / DEFAULT → 约束信息                              │   │
+│  └───────────────────────────────────────────────────────────┘   │
+│                         ▲ 自动提取                                │
+│                                                                   │
+│  第一层：字段名 + 类型（基础）                                     │
+│  ┌───────────────────────────────────────────────────────────┐   │
+│  │  DESCRIBE table / information_schema.columns               │   │
+│  │  仅获知字段名和数据类型                                      │   │
+│  └───────────────────────────────────────────────────────────┘   │
+│                         ▲ 原始数据                                │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 数据库 COMMENT 自动提取
+
+系统在每次查询时会连接到用户数据库，自动提取两类 COMMENT：
+
+**字段 COMMENT**：
+- MySQL：执行 `SHOW FULL COLUMNS FROM table`，读取第 9 列 Comment 字段
+- PostgreSQL：调用 `pg_catalog.col_description()` 获取字段注释
+
+**表 COMMENT**：
+- MySQL：查询 `information_schema.tables` 的 `TABLE_COMMENT` 列
+- PostgreSQL：调用 `obj_description(pg_class.oid)` 获取表注释
+
+提取结果通过以下优先级合并到 Schema 中（高到低）：
+
+```
+用户自定义语义层描述  >  数据库 COMMENT 注释  >  (空，LLM 凭字段名推断)
+```
+
+建表示例：
+
+```sql
+-- MySQL 示例建表
+CREATE TABLE orders (
+    id INT PRIMARY KEY COMMENT '订单ID',
+    user_id INT NOT NULL COMMENT '用户ID，关联users表',
+    total_amount DECIMAL(10,2) COMMENT '订单总金额（含税）',
+    status VARCHAR(20) DEFAULT 'pending' COMMENT '订单状态: pending/completed/cancelled',
+    created_at TIMESTAMP COMMENT '创建时间'
+) COMMENT='订单主表';
+```
+
+系统会自动读取 COMMENT 并填入 schema 的「说明」列。
+
+### 样本数据自动采集
+
+系统会为每个表抓取 3 行样本数据，LLM 由此获知：
+
+- 字段的实际数据格式（日期格式、数值范围）
+- 枚举字段的可能取值（如 `status = 'completed'`）
+- 数据之间的关联模式
+
+### 用户自定义语义层
+
+用户可以通过 API 或前端为表和字段添加中文说明，覆盖数据库 COMMENT。
+
+API 端点：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/{ds_id}/all-tables` | 列出数据源所有表 |
+| GET | `/{ds_id}/semantic/tables` | 获取表描述列表 |
+| POST | `/{ds_id}/semantic/tables` | 创建/更新表描述 |
+| DELETE | `/{ds_id}/semantic/tables/{table_name}` | 删除表描述（级联字段） |
+| GET | `/{ds_id}/semantic/fields?table_name=x` | 获取字段描述列表 |
+| POST | `/{ds_id}/semantic/fields` | 创建/更新字段描述 |
+| PUT | `/{ds_id}/semantic/fields/{field_id}` | 更新字段描述 |
+| DELETE | `/{ds_id}/semantic/fields/{field_id}` | 删除字段描述 |
+| POST | `/{ds_id}/semantic/import` | 批量导入语义描述 |
+| GET | `/{ds_id}/semantic/export` | 导出全部语义描述 |
+
+### LLM 收到的完整 Schema 示例
+
+经过三层叠加后，LLM 收到的 schema 格式如下：
+
+```
+═══════════════════════════════════════
+表名: orders
+表说明: 订单主表，记录每笔订单的完整信息
+主键: id
+外键:
+  user_id -> users.id
+
+字段名                 类型                  约束                       说明
+------------------------------------------------------------------------------------------
+id                    int                  PK, NOT NULL              订单ID
+user_id               int                  NOT NULL, FK→users.id     用户ID
+total_amount          decimal(10,2)        NOT NULL                  订单总金额（含税）
+status                varchar(20)          默认=pending               订单状态: pending/completed/cancelled
+created_at            timestamp            NOT NULL                  创建时间
+
+【orders 示例数据 (3行)】
+  id | user_id | total_amount | status | created_at
+  ----------------------------------------
+  1 | 100 | 299.99 | completed | 2025-01-15T10:30:00
+  2 | 101 | 599.5 | pending | 2025-01-16T14:20:00
+  3 | 100 | 129.0 | cancelled | 2025-01-17T09:00:00
+```
+
+---
+
 ## 项目结构
 
 ```
@@ -267,7 +394,6 @@ backend/
 ├── requirements.txt                 # Python 依赖
 ├── Dockerfile                       # Docker 镜像构建文件
 ├── .env                             # 环境变量（API Key、数据库地址等）
-├── text2sql_admin.db                # SQLite 管理数据库（自动生成）
 │
 └── app/                             # 应用主目录
     │
@@ -282,10 +408,11 @@ backend/
     │   ├── auth.py                  # Token, TokenData, UserCreate, UserResponse
     │   ├── user.py                  # UserUpdate, UserResponse
     │   ├── data_source.py           # DataSourceCreate/Update/Response, TableInfo
-    │   └── text_to_sql.py           # QueryRequest, QueryResponse, QueryHistoryResponse
+    │   ├── text_to_sql.py           # QueryRequest, QueryResponse, QueryHistoryResponse
+    │   └── semantic.py              # 语义层 Schema（表/字段描述 CRUD + 导入导出）
     │
     ├── db/                          # 数据库会话
-    │   └── session.py               # SQLAlchemy engine 创建、Session 工厂、建表
+    │   └── session.py               # 连接池管理、Session 工厂、自动建表
     │
     ├── api/                         # API 路由层
     │   └── v1/
@@ -446,6 +573,29 @@ backend/
 | error_message | Text | 错误信息 |
 | created_at | DateTime | 创建时间 |
 
+### TableDescriptions (表描述)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String(36) | UUID 主键 |
+| data_source_id | String(36) | 关联数据源 |
+| table_name | String(100) | 表名，同一数据源下唯一 |
+| description | Text | 用户自定义的表中文说明 |
+| created_at | DateTime | 创建时间 |
+| updated_at | DateTime | 更新时间 |
+
+### FieldDescriptions (字段描述)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | String(36) | UUID 主键 |
+| data_source_id | String(36) | 关联数据源 |
+| table_name | String(100) | 所属表名 |
+| field_name | String(100) | 字段名 |
+| description | Text | 用户自定义的字段中文说明 |
+| created_at | DateTime | 创建时间 |
+| updated_at | DateTime | 更新时间 |
+
 ---
 
 ## 配置说明
@@ -469,7 +619,7 @@ backend/
 | `chroma_host` | `localhost` | ChromaDB 地址 |
 | `chroma_port` | `8000` | ChromaDB 端口 |
 | `chroma_use_remote` | `false` | 是否使用远程 ChromaDB |
-| `admin_db_url` | `sqlite:///./text2sql_admin.db` | 管理数据库 URL |
+| `admin_db_url` | `mysql+mysqlconnector://text2sql:text2sql123@localhost:3306/text2sql_admin` | MySQL 管理数据库 URL |
 | `secret_key` | - | JWT 签名密钥 |
 | `algorithm` | `HS256` | JWT 算法 |
 | `access_token_expire_minutes` | `30` | Token 有效期（分钟） |
@@ -546,7 +696,7 @@ docker-compose up -d
 | backend | 8000 | FastAPI 后端 |
 | redis | 6379 | Redis 缓存 |
 | chromadb | 8001 | ChromaDB 向量数据库 |
-| mysql | 3306 | 示例 MySQL 数据库（含测试数据） |
+| mysql | 3306 | MySQL 管理数据库 + 示例业务数据库 |
 
 ---
 
@@ -586,7 +736,7 @@ XP_*, SP_*
 | 依赖 | 用途 |
 |------|------|
 | fastapi / uvicorn | Web 框架和服务器 |
-| sqlalchemy | ORM（管理数据库用 SQLite） |
+| sqlalchemy | ORM（管理数据库用 MySQL） |
 | langchain | LLM 统一调用抽象 |
 | langchain-chroma | ChromaDB 向量存储集成（预留） |
 | chromadb | 向量数据库 |
