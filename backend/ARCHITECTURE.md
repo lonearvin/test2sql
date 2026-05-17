@@ -7,15 +7,81 @@
 ## 目录
 
 1. [项目概览与系统定位](#一项目概览与系统定位)
+   - [1.1 系统定义](#11-系统定义)
+   - [1.2 核心能力矩阵](#12-核心能力矩阵)
+   - [1.3 技术选型](#13-技术选型)
+   - [1.4 项目文件结构](#14-项目文件结构)
 2. [整体架构图](#二整体架构图)
+   - [2.1 系统架构全景](#21-系统架构全景)
+   - [2.2 核心查询流程](#22-核心查询流程)
+   - [2.3 三层架构关系](#23-三层架构关系)
+   - [2.4 架构设计原则](#24-架构设计原则)
 3. [分层设计详解](#三分层设计详解)
+   - [3.1 API 路由层](#31-api-路由层)
+   - [3.2 Service 层](#32-service-层)
+   - [3.3 Infrastructure 层](#33-infrastructure-层)
 4. [核心查询流程](#四核心查询流程)
+   - [4.1 Text-to-SQL 查询流程](#41-text-to-sql-查询流程)
+   - [4.2 RAG 检索增强流程](#42-rag-检索增强流程)
+   - [4.3 SQL 安全校验流程](#43-sql-安全校验流程)
+   - [4.4 多轮对话流程](#44-多轮对话流程)
 5. [Schema 智能解析系统](#五schema-智能解析系统)
+   - [5.1 Schema 获取机制](#51-schema-获取机制)
+   - [5.2 Redis 缓存策略](#52-redis-缓存策略)
+   - [5.3 语义层加载](#53-语义层加载)
+   - [5.4 缓存失效机制](#54-缓存失效机制)
+   - [5.5 Schema 字段说明](#55-schema-字段说明)
+   - [5.6 Schema 响应示例](#56-schema-响应示例)
 6. [安全体系](#六安全体系)
+   - [6.1 SQL 关键词检测](#61-sql-关键词检测)
+   - [6.2 查询结果限制](#62-查询结果限制)
+   - [6.3 敏感字段脱敏](#63-敏感字段脱敏)
 7. [RAG 检索增强生成](#七rag-检索增强生成)
+   - [7.1 相似度搜索机制](#71-相似度搜索机制)
+   - [7.2 Prompt 增强策略](#72-prompt-增强策略)
+   - [7.3 查询历史存储](#73-查询历史存储)
+   - [7.4 向量模型配置](#74-向量模型配置)
+   - [7.5 RAG 效果评估](#75-rag-效果评估)
 8. [数据模型与存储](#八数据模型与存储)
+   - [8.1 ORM 模型定义](#81-orm-模型定义)
+   - [8.2 数据库表结构](#82-数据库表结构)
+   - [8.3 数据关系映射](#83-数据关系映射)
+   - [8.4 索引优化](#84-索引优化)
 9. [API 接口与调用时序](#九api-接口与调用时序)
+   - [9.1 认证接口时序](#91-认证接口时序)
+   - [9.2 查询接口时序](#92-查询接口时序)
 10. [部署架构](#十部署架构)
+    - [10.1 Docker 容器化](#101-docker-容器化)
+    - [10.2 环境变量配置](#102-环境变量配置)
+    - [10.3 端口配置](#103-端口配置)
+    - [10.4 健康检查](#104-健康检查)
+    - [10.5 日志管理](#105-日志管理)
+11. [扩展性设计](#十一扩展性设计)
+    - [11.1 模块化架构](#11-1-模块化架构)
+    - [11.2 LLM Provider 扩展](#11-2-llm-provider-扩展)
+    - [11.3 向量存储扩展](#11-3-向量存储扩展)
+    - [11.4 数据源类型扩展](#11-4-数据源类型扩展)
+    - [11.5 API 版本管理](#11-5-api-版本管理)
+    - [11.6 插件系统（规划中）](#11-6-插件系统规划中)
+12. [架构决策记录 (ADR)](#十二架构决策记录-adr)
+    - [ADR-001: 使用 FastAPI 作为 Web 框架](#adr-001-使用-fastapi-作为-web-框架)
+    - [ADR-002: 采用三层架构](#adr-002-采用三层架构)
+    - [ADR-003: LLM 选型（DeepSeek）](#adr-003-llm-选型deepseek)
+    - [ADR-004: RAG 相似度阈值设定](#adr-004-rag-相似度阈值设定)
+    - [ADR-005: Schema 缓存策略](#adr-005-schema-缓存策略)
+    - [ADR-006: SQL 安全校验策略](#adr-006-sql-安全校验策略)
+13. [未来架构演进方向](#十三未来架构演进方向)
+    - [13.1 短期规划（1-3 个月）](#13-1-短期规划1-3-个月)
+    - [13.2 中期规划（3-6 个月）](#13-2-中期规划3-6-个月)
+    - [13.3 长期规划（6-12 个月）](#13-3-长期规划6-12-个月)
+    - [13.4 技术债务清理计划](#13-4-技术债务清理计划)
+    - [13.5 性能目标](#13-5-性能目标)
+    - [13.6 社区与生态](#13-6-社区与生态)
+14. [附录](#十四附录)
+    - [A. 术语表](#a-术语表)
+    - [B. 参考资料](#b-参考资料)
+    - [C. 版本历史](#c-版本历史)
+    - [D. 联系方式](#d-联系方式)
 
 ---
 
@@ -96,95 +162,166 @@ backend/
         ├── redis_client.py              # Redis 客户端
         ├── vector_store.py              # ChromaDB 向量存储
         └── rag_service.py               # RAG 检索服务
-
-
----
+```
 
 ## 二、整体架构图
 
-### 2.1 全局架构
+### 2.1 系统架构全景
 
-```
-                              ┌──────────────────────────────┐
-                              │        Frontend (React)       │
-                              │      http://localhost:5173     │
-                              └──────────────┬───────────────┘
-                                             │ HTTP REST (JSON)
-                                             ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                           FastAPI Application                                  │
-│                         http://localhost:8000                                   │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐ │
-│  │                           Middleware                                       │ │
-│  │                    CORS (allow_origins=["*"])                              │ │
-│  └──────────────────────────────────────────────────────────────────────────┘ │
-│                                                                                │
-│  ┌──────────────────────────────────────────────────────────────────────────┐ │
-│  │                          /api/v1 Router                                    │ │
-│  │  ┌───────────┐  ┌───────────┐  ┌──────────────┐  ┌────────────────────┐  │ │
-│  │  │   /auth   │  │  /users   │  │/data-sources │  │   /text-to-sql     │  │ │
-│  │  │  认证鉴权  │  │  用户管理  │  │  数据源管理   │  │   核心查询引擎      │  │ │
-│  │  │           │  │           │  │  + 语义层API  │  │                    │  │ │
-│  │  └─────┬─────┘  └─────┬─────┘  └──────┬───────┘  └─────────┬──────────┘  │ │
-│  └────────┼──────────────┼───────────────┼───────────────────┼──────────────┘ │
-└───────────┼──────────────┼───────────────┼───────────────────┼────────────────┘
-            │              │               │                   │
-            ▼              ▼               ▼                   ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                             Service Layer                                      │
-│                                                                                │
-│  ┌────────────────────┐  ┌────────────────────┐  ┌─────────────────────────┐ │
-│  │   SchemaService    │  │  SecurityService   │  │   TextToSQLService      │ │
-│  │  ───────────────── │  │  ───────────────── │  │  ─────────────────────── │ │
-│  │  • get_schema()    │  │  • validate_sql()  │  │  • generate_and_execute()│ │
-│  │  • Redis 缓存管理   │  │  • sanitize_sql()  │  │  • get_history()        │ │
-│  │  • 语义层加载       │  │  • mask_results()  │  │  • delete_history()     │ │
-│  │  • 缓存失效         │  │  • 敏感字段检测     │  │  • 多轮对话编排          │ │
-│  └─────────┬──────────┘  └─────────┬──────────┘  └────────────┬────────────┘ │
-└────────────┼───────────────────────┼──────────────────────────┼──────────────┘
-             │                       │                          │
-             ▼                       ▼                          ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                         Infrastructure Layer                                    │
-│                                                                                │
-│  ┌───────────────┐ ┌───────────────┐ ┌────────────────┐ ┌─────────────────┐  │
-│  │  RedisClient  │ │  LLMClient    │ │ DBConnector    │ │  RAGService     │  │
-│  │  ──────────── │ │  ──────────── │ │ ────────────── │ │  ──────────────  │  │
-│  │  • Schema缓存  │ │  • LangChain  │ │  • MySQL/PG    │ │  • 相似查询检索   │  │
-│  │  • JSON存取    │ │  • DeepSeek   │ │  • 连接测试    │ │  • Prompt增强    │  │
-│  │  • TTL管理    │ │  • 多轮对话   │ │  • Schema提取  │ │  • 查询存储       │  │
-│  └───────┬───────┘ └───────┬───────┘ └───────┬────────┘ └────────┬────────┘  │
-│          │                 │                 │                  │            │
-│  ┌───────┴─────────────────┴─────────────────┴──────────────────┴────────┐   │
-│  │                        VectorStore (ChromaDB)                          │   │
-│  │  ─────────────────────────────────────────────────────────────────── │   │
-│  │  • Collection: query_history  • Index: HNSW  • Similarity: Cosine     │   │
-│  │  • 384维向量 (all-MiniLM-L6-v2)  • 相似度阈值: 0.7                     │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────┬────────────────────────────┘
-                                                  │
-        ┌──────────────────┬──────────────────────┼──────────────────────┐
-        ▼                  ▼                      ▼                      ▼
-┌───────────────┐ ┌───────────────┐ ┌───────────────────┐ ┌──────────────────┐
-│ Docker MySQL  │ │    Redis      │ │    ChromaDB       │ │  External LLM    │
-│  ──────────── │ │  ──────────── │ │  ────────────────  │ │  ─────────────── │
-│ text2sql_admin│ │  Schema 缓存   │ │  查询向量索引      │ │  DeepSeek API    │
-│ (管理数据库)   │ │  TTL = 3600s  │ │  HNSW + Cosine   │ │  OpenAI API      │
-│               │ │               │ │                    │ │                  │
-│ text2sql_demo │ │               │ │                    │ │                  │
-│ (示例业务数据) │ │               │ │                    │ │                  │
-└───────────────┘ └───────────────┘ └───────────────────┘ └──────────────────┘
-                                        ▲
-                                        │
-                               ┌──────────────────┐
-                               │  sentence-       │
-                               │  transformers    │
-                               │  (文本向量化)     │
-                               └──────────────────┘
+```mermaid
+graph TB
+    subgraph Frontend["前端层 (React)"]
+        UI[用户界面<br/>localhost:5173]
+    end
+
+    subgraph Backend["后端服务层 (FastAPI)"]
+        subgraph API_Layer["API 路由层"]
+            Auth[认证接口<br/>/api/v1/auth]
+            Users[用户接口<br/>/api/v1/users]
+            DataSources[数据源接口<br/>/api/v1/data-sources]
+            TextToSQL[查询接口<br/>/api/v1/text-to-sql]
+        end
+
+        subgraph Service_Layer["Service 层"]
+            SchemaService["SchemaService<br/>• get_schema()"]
+            SecurityService["SecurityService<br/>• validate_sql()"]
+            TextToSQLService["TextToSQLService<br/>• generate_and_execute()"]
+        end
+
+        subgraph Infrastructure_Layer["Infrastructure 层"]
+            LLMClient["LLMClient<br/>• LangChain<br/>• DeepSeek"]
+            DBConnector["DBConnector<br/>• MySQL<br/>• PostgreSQL"]
+            RedisClient["RedisClient<br/>• Schema 缓存"]
+            RAGService["RAGService<br/>• 相似查询检索"]
+            VectorStore["VectorStore<br/>ChromaDB"]
+        end
+    end
+
+    subgraph External_Services["外部服务"]
+        LLM_API["LLM API<br/>DeepSeek / OpenAI"]
+        Target_DB["目标数据库<br/>MySQL / PostgreSQL"]
+    end
+
+    subgraph Data_Storage["数据存储"]
+        MySQL[("MySQL<br/>text2sql_admin<br/>管理库")]
+        Redis[("Redis<br/>Schema 缓存<br/>TTL=3600s")]
+        ChromaDB[("ChromaDB<br/>向量存储<br/>query_history")]
+    end
+
+    UI -->|"HTTP REST"| Auth
+    UI -->|"HTTP REST"| Users
+    UI -->|"HTTP REST"| DataSources
+    UI -->|"HTTP REST"| TextToSQL
+
+    Auth --> SchemaService
+    Users --> SchemaService
+    DataSources --> SchemaService
+    TextToSQL --> TextToSQLService
+
+    TextToSQLService --> SchemaService
+    TextToSQLService --> SecurityService
+
+    SchemaService --> RedisClient
+    SchemaService --> DBConnector
+
+    SecurityService --> RedisClient
+    SecurityService --> DBConnector
+
+    TextToSQLService --> LLMClient
+    TextToSQLService --> RAGService
+
+    RAGService --> VectorStore
+    RAGService --> LLMClient
+
+    DBConnector -->|"执行 SQL"| Target_DB
+    LLMClient -->|"API 调用"| LLM_API
+
+    RedisClient --> Redis
+    VectorStore --> ChromaDB
+    DBConnector --> MySQL
+
+    style Frontend fill:#e1f5fe,color:#01579b
+    style Backend fill:#f3e5f5,color:#4a148c
+    style External_Services fill:#fff3e0,color:#e65100
+    style Data_Storage fill:#e8f5e9,color:#1b5e20
+    style API_Layer fill:#ffffff,color:#000000
+    style Service_Layer fill:#ffffff,color:#000000
+    style Infrastructure_Layer fill:#ffffff,color:#000000
 ```
 
-### 2.2 架构设计原则
+### 2.2 核心查询流程
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Frontend as 前端
+    participant API as API 层
+    participant Service as Service 层
+    participant Infra as Infrastructure 层
+    participant LLM as LLM API
+    participant DB as 目标数据库
+
+    User->>Frontend: 输入自然语言问题
+    Frontend->>API: POST /api/v1/text-to-sql/query
+
+    API->>Service: generate_and_execute()
+
+    Service->>Service: Step 1: 鉴权验证
+    Service->>Infra: Step 2: 获取 Schema
+    Infra->>Infra: Redis 缓存?
+    alt 缓存未命中
+        Infra->>DB: 连接目标数据库
+        DB-->>Infra: 返回表结构
+        Infra->>Infra: 写入 Redis 缓存
+    end
+    Service->>Infra: Step 3: RAG 检索
+    Infra->>Infra: 向量相似度搜索
+    Service->>LLM: Step 4: LLM 生成 SQL
+    Service->>Service: Step 5-6: SQL 安全校验
+    Service->>DB: Step 7: 执行 SQL
+    DB-->>Service: 返回查询结果
+    Service->>Service: Step 8: 结果脱敏
+    Service->>Infra: Step 9: 存储记录
+    Service-->>API: QueryResponse
+    API-->>Frontend: 返回结果
+    Frontend-->>User: 展示结果
+```
+
+### 2.3 三层架构关系
+
+```mermaid
+graph LR
+    subgraph API["第一层：API 路由层"]
+        A1[认证接口]
+        A2[用户接口]
+        A3[数据源接口]
+        A4[查询接口]
+    end
+
+    subgraph Service["第二层：Service 层"]
+        S1[TextToSQLService<br/>核心编排引擎]
+        S2[SchemaService<br/>Schema 获取与缓存]
+        S3[SecurityService<br/>SQL 安全校验]
+    end
+
+    subgraph Infra["第三层：Infrastructure 层"]
+        I1[LLMClient]
+        I2[DBConnector]
+        I3[RedisClient]
+        I4[RAGService]
+        I5[VectorStore]
+    end
+
+    API --> Service
+    Service --> Infra
+    Infra --> External["外部系统<br/>(LLM API / 数据库)"]
+
+    style API fill:#e3f2fd,color:#0d47a1
+    style Service fill:#f3e5f5,color:#4a148c
+    style Infra fill:#e8f5e9,color:#1b5e20
+```
+
+### 2.4 架构设计原则
 
 | 原则 | 实现方式 |
 |------|----------|
