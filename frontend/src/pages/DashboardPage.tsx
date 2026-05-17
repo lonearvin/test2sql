@@ -63,7 +63,7 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
         textToSQLAPI.getStats()
       ]);
       setDataSources(sources);
-      setRecentQueries(history);
+      setRecentQueries(history.slice(0, 10));
       setTotalQueries(stats.total_queries);
       setSuccessCount(stats.success_count);
     } catch (error) {
@@ -72,7 +72,7 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
   };
 
   const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z');
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -145,7 +145,7 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
                         <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">问题</th>
                         <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">SQL</th>
                         <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">状态</th>
-                        <th className="text-left py-3 px-2 text-sm font-medium text-gray-600">时间</th>
+                        <th className="text-left py-3 px-2 text-sm font-medium text-gray-600 whitespace-nowrap min-w-[85px]">时间</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -177,7 +177,7 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
                             </span>
                           </td>
                           <td className="py-3 px-2">
-                            <span className="text-sm text-gray-500">{formatTime(query.created_at)}</span>
+                            <span className="text-sm text-gray-500 whitespace-nowrap">{formatTime(query.created_at)}</span>
                           </td>
                         </tr>
                       ))}
