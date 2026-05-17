@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from app.models.database import User
 from app.db.session import get_db
@@ -55,6 +55,15 @@ def get_history(
 
     return results
 
+
+@router.get("/history/stats", response_model=Dict[str, int])
+def get_history_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    return text_to_sql_service.get_stats(current_user, db)
+
+
 @router.get("/history/{history_id}", response_model=QueryHistoryResponse)
 def get_history_by_id(
     history_id: str,
@@ -84,8 +93,9 @@ def delete_history(
 ):
     success = text_to_sql_service.delete_history(history_id, current_user, db)
     if not success:
-        raise HTTPException(status_code=404, detail="查询历史不存在")
-    return {"message": "查询历史删除成功"}
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {"message": "已删除"}
+
 
 @router.get("/similar")
 def get_similar_queries(

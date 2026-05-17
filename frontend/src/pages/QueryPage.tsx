@@ -42,6 +42,7 @@ const QueryPage: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [expandedResults, setExpandedResults] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<{ id: string; message: string; type: 'success' | 'error' }[]>([]);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<{ icon: string; text: string }[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const addToast = (message: string, type: 'success' | 'error') => {
@@ -53,6 +54,14 @@ const QueryPage: React.FC = () => {
   useEffect(() => {
     fetchDataSources();
   }, []);
+
+  useEffect(() => {
+    if (!token || !selectedDataSource) {
+      setSuggestedQuestions([]);
+      return;
+    }
+    fetchSuggestedQuestions();
+  }, [selectedDataSource, token]);
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -70,6 +79,45 @@ const QueryPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch data sources:', error);
+    }
+  };
+
+  const fetchSuggestedQuestions = async () => {
+    if (!token || !selectedDataSource) return;
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+      const resp = await fetch(`${baseUrl}/data-sources/${selectedDataSource}/all-tables`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await resp.json();
+      const tables: string[] = data.tables || [];
+      
+      const suggestions: { icon: string; text: string }[] = [];
+      
+      if (tables.length === 0) {
+        suggestions.push(
+          { icon: '📋', text: '数据库中有哪些表？' },
+          { icon: '🔍', text: '列出所有表的结构信息' },
+          { icon: '📊', text: '展示当前数据库的基本信息' }
+        );
+      } else {
+        const t1 = tables[0];
+        const t2 = tables.length > 1 ? tables[1] : tables[0];
+        const t3 = tables.length > 2 ? tables[2] : tables[0];
+        suggestions.push(
+          { icon: '📊', text: `查询 ${t1} 表中有多少条记录？` },
+          { icon: '🔍', text: `列出 ${t2} 表的所有数据` },
+          { icon: '📋', text: `展示 ${t3} 表的结构和字段说明` }
+        );
+      }
+      
+      setSuggestedQuestions(suggestions);
+    } catch {
+      setSuggestedQuestions([
+        { icon: '📊', text: '数据库中有多少张表？' },
+        { icon: '🔍', text: '列出所有表的名称' },
+        { icon: '📋', text: '显示当前数据库信息' }
+      ]);
     }
   };
 
@@ -257,21 +305,23 @@ const QueryPage: React.FC = () => {
                 <div className="space-y-3">
                   <p className="text-xs uppercase tracking-wider text-gray-400 font-medium">试试这样问</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      { icon: '📊', text: '查询所有用户' },
-                      { icon: '📈', text: '统计订单数量' },
-                      { icon: '📦', text: '获取产品列表' }
-                    ].map((item, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setCurrentQuestion(item.text)}
-                        disabled={!selectedDataSource}
-                        className="px-4 py-3 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-xl text-sm text-gray-700 hover:text-blue-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-left flex items-center gap-2"
-                      >
-                        <span>{item.icon}</span>
-                        <span>{item.text}</span>
-                      </button>
-                    ))}
+                    {suggestedQuestions.length > 0 ? (
+                      suggestedQuestions.map((item, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setCurrentQuestion(item.text)}
+                          disabled={!selectedDataSource}
+                          className="px-4 py-3 bg-white hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-xl text-sm text-gray-700 hover:text-blue-700 transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-left flex items-center gap-2"
+                        >
+                          <span>{item.icon}</span>
+                          <span>{item.text}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="col-span-3 text-center text-sm text-gray-400 py-4">
+                        选择数据源后将自动生成示例问题
+                      </div>
+                    )}
                   </div>
                 </div>
 

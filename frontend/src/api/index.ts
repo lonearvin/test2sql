@@ -152,6 +152,11 @@ export const textToSQLAPI = {
     const response = await api.delete(`/text-to-sql/history/${id}`);
     return response.data;
   },
+
+  getStats: async (): Promise<{ total_queries: number; success_count: number }> => {
+    const response = await api.get('/text-to-sql/history/stats');
+    return response.data;
+  },
 };
 
 export default api;

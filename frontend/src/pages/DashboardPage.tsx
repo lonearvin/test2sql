@@ -47,6 +47,8 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
   const { token, user } = useAuth();
   const [dataSources, setDataSources] = useState<DataSource[]>([]);
   const [recentQueries, setRecentQueries] = useState<QueryHistory[]>([]);
+  const [totalQueries, setTotalQueries] = useState(0);
+  const [successCount, setSuccessCount] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -55,11 +57,15 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
   const loadData = async () => {
     if (!token) return;
     try {
-      const sources = await dataSourceAPI.getAll();
+      const [sources, history, stats] = await Promise.all([
+        dataSourceAPI.getAll(),
+        textToSQLAPI.getHistory(),
+        textToSQLAPI.getStats()
+      ]);
       setDataSources(sources);
-      
-      const history = await textToSQLAPI.getHistory();
-      setRecentQueries(history.slice(0, 10));
+      setRecentQueries(history);
+      setTotalQueries(stats.total_queries);
+      setSuccessCount(stats.success_count);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     }
@@ -78,9 +84,6 @@ export const DashboardPage = ({ onNavigate }: { onNavigate: (page: string) => vo
     if (hours < 24) return `${hours}小时前`;
     return `${days}天前`;
   };
-
-  const successCount = recentQueries.filter(q => q.status === 'success').length;
-  const totalQueries = recentQueries.length;
 
   return (
     <div className="space-y-6">

@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.models.database import DataSource, QueryHistory, User
 from app.services.schema_service import schema_service
 from app.services.security_service import security_service
@@ -156,6 +157,12 @@ class TextToSQLService:
         db.delete(history)
         db.commit()
         return True
+
+    def get_stats(self, current_user: User, db: Session) -> Dict[str, int]:
+        base = db.query(QueryHistory).filter(QueryHistory.user_id == current_user.id)
+        total = base.count()
+        success = base.filter(QueryHistory.status == 'success').count()
+        return {'total_queries': total, 'success_count': success}
 
     def get_similar_queries(
         self,
