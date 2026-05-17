@@ -50,54 +50,170 @@
 | Prettier | 最新 | 代码格式化 |
 | Lucide React | 最新 | 轻量级图标库 |
 
+### 前后端交互架构
+
+```mermaid
+graph TB
+    subgraph Frontend["前端 (React + Vite)"]
+        UI[用户界面]
+        State[React Context<br/>状态管理]
+        API[Axios<br/>API 调用]
+    end
+
+    subgraph Backend["后端 (FastAPI)"]
+        Auth[/auth<br/>认证]
+        Users[/users<br/>用户]
+        DataSources[/data-sources<br/>数据源]
+        Query[/text-to-sql<br/>查询引擎]
+    end
+
+    subgraph Data["数据层"]
+        Redis[(Redis<br/>缓存)]
+        MySQL[(MySQL<br/>管理库)]
+        ChromaDB[(ChromaDB<br/>向量)]
+    end
+
+    subgraph LLM["外部服务"]
+        DeepSeek[DeepSeek API]
+        TargetDB[目标数据库]
+    end
+
+    UI <-->|HTTP REST<br/>JWT| State
+    State --> API
+    API --> Auth & Users & DataSources & Query
+
+    Query -->|Schema| Redis
+    Query -->|用户数据| MySQL
+    Query -->|向量检索| ChromaDB
+
+    Query -->|LLM 调用| DeepSeek
+    Query -->|SQL 执行| TargetDB
+
+    style Frontend fill:#e1f5fe,color:#01579b
+    style Backend fill:#f3e5f5,color:#4a148c
+    style Data fill:#e8f5e9,color:#1b5e20
+    style LLM fill:#fff3e0,color:#e65100
+```
+
 ## 项目结构
 
+### 目录树状图
+
+```mermaid
+graph TD
+    subgraph Frontend["frontend/"]
+        subgraph Public["public/"]
+            ViteSVG[vite.svg<br/>Vite Logo]
+        end
+
+        subgraph Src["src/"]
+            subgraph Api["api/"]
+                APIIndex[index.ts<br/>Axios 配置<br/>API 方法]
+            end
+
+            subgraph Assets["assets/"]
+                ReactSVG[react.svg<br/>React Logo]
+            end
+
+            subgraph Components["components/"]
+                subgraph Layout["layout/"]
+                    Sidebar[Sidebar.tsx<br/>侧边栏导航]
+                end
+
+                subgraph UI["ui/"]
+                    Button[Button.tsx<br/>按钮组件]
+                    Card[Card.tsx<br/>卡片/模态框]
+                    Input[Input.tsx<br/>输入框组件]
+                end
+            end
+
+            subgraph Context["context/"]
+                AuthContext[AuthContext.tsx<br/>认证状态管理]
+            end
+
+            subgraph Pages["pages/"]
+                LoginPage[LoginPage.tsx<br/>登录页面]
+                DashboardPage[DashboardPage.tsx<br/>仪表盘]
+                DatasourcePage[DatasourcePage.tsx<br/>数据源管理]
+                QueryPage[QueryPage.tsx<br/>智能查询]
+                PageComponents[PageComponents.tsx<br/>注册/设置]
+            end
+
+            subgraph Types["types/"]
+                TypesIndex[index.ts<br/>TypeScript 类型定义]
+            end
+
+            App[App.tsx<br/>应用主组件]
+            Main[main.tsx<br/>React 渲染入口]
+            IndexCSS[index.css<br/>全局样式]
+        end
+
+        IndexHTML[index.html<br/>HTML 入口]
+        PackageJSON[package.json<br/>依赖配置]
+        ViteConfig[vite.config.ts<br/>Vite 配置]
+        TsConfig[tsconfig.json<br/>TS 配置]
+    end
+
+    style Frontend fill:#e1f5fe,color:#01579b
+    style Public fill:#ffffff,color:#000000
+    style Src fill:#f3e5f5,color:#4a148c
+    style Api fill:#ffffff,color:#000000
+    style Assets fill:#ffffff,color:#000000
+    style Components fill:#ffffff,color:#000000
+    style Layout fill:#ffffff,color:#000000
+    style UI fill:#ffffff,color:#000000
+    style Context fill:#fff3e0,color:#e65100
+    style Pages fill:#e8f5e9,color:#1b5e20
+    style Types fill:#ffffff,color:#000000
 ```
-frontend/
-│
-├── public/                        # 静态资源
-│   └── vite.svg                   # Vite Logo
-│
-├── src/                          # 源代码目录
-│   │
-│   ├── api/                      # API 封装层
-│   │   └── index.ts              # Axios 实例配置和 API 方法封装
-│   │
-│   ├── assets/                   # 静态资源
-│   │   └── react.svg             # React Logo
-│   │
-│   ├── components/               # 可复用组件
-│   │   │
-│   │   ├── layout/              # 布局组件
-│   │   │   └── Sidebar.tsx      # 侧边栏导航组件
-│   │   │
-│   │   └── ui/                  # 基础 UI 组件
-│   │       ├── Button.tsx        # 按钮组件（多种变体）
-│   │       ├── Card.tsx          # 卡片/模态框/提示框
-│   │       └── Input.tsx         # 输入框组件
-│   │
-│   ├── context/                  # React Context
-│   │   └── AuthContext.tsx      # 认证状态管理
-│   │
-│   ├── pages/                    # 页面组件
-│   │   ├── LoginPage.tsx        # 登录页面
-│   │   ├── DashboardPage.tsx    # 主仪表盘页面
-│   │   ├── DatasourcePage.tsx   # 数据源管理页面
-│   │   ├── QueryPage.tsx        # 智能查询页面
-│   │   └── PageComponents.tsx    # 注册页、设置页等
-│   │
-│   ├── types/                    # TypeScript 类型定义
-│   │   └── index.ts             # 全局类型定义和接口
-│   │
-│   ├── App.tsx                  # 应用主组件，路由配置
-│   ├── App.css                  # 应用全局样式
-│   ├── main.tsx                # React DOM 渲染入口
-│   └── index.css               # 全局样式和 TailwindCSS 入口
-│
-├── index.html                   # HTML 入口文件
-├── package.json                # 项目依赖配置
-├── vite.config.ts              # Vite 构建配置
-├── tsconfig.json               # TypeScript 编译器配置
+
+### 组件关系图
+
+```mermaid
+graph LR
+    subgraph Pages["页面层"]
+        LoginPage["LoginPage<br/>登录页"]
+        DashboardPage["DashboardPage<br/>仪表盘"]
+        QueryPage["QueryPage<br/>智能查询"]
+        DatasourcePage["DatasourcePage<br/>数据源"]
+        SettingsPage["SettingsPage<br/>设置"]
+    end
+
+    subgraph Components["组件层"]
+        Sidebar["Sidebar<br/>侧边栏"]
+        Button["Button<br/>按钮"]
+        Card["Card<br/>卡片"]
+        Input["Input<br/>输入框"]
+    end
+
+    subgraph Contexts["状态管理层"]
+        AuthContext["AuthContext<br/>认证状态"]
+    end
+
+    subgraph API["API 层"]
+        AuthAPI["authAPI<br/>认证接口"]
+        UserAPI["userAPI<br/>用户接口"]
+        DataSourceAPI["dataSourceAPI<br/>数据源接口"]
+        QueryAPI["textToSQLAPI<br/>查询接口"]
+    end
+
+    Pages --> Components
+    Pages --> Contexts
+    Contexts --> API
+    Components --> API
+
+    LoginPage --> AuthContext
+    DashboardPage --> AuthContext
+    QueryPage --> AuthContext
+    DatasourcePage --> AuthContext
+
+    style Pages fill:#e3f2fd,color:#0d47a1
+    style Components fill:#f3e5f5,color:#4a148c
+    style Contexts fill:#fff3e0,color:#e65100
+    style API fill:#e8f5e9,color:#1b5e20
+```
+
+```text
 ├── tsconfig.app.json           # 应用特定的 TypeScript 配置
 ├── tsconfig.node.json          # Node 环境的 TypeScript 配置
 ├── eslint.config.js            # ESLint 配置
@@ -111,6 +227,29 @@ frontend/
 API 层采用 Axios 封装，提供统一的数据交互接口。
 
 #### Axios 实例配置
+
+```mermaid
+sequenceDiagram
+    participant Component as React 组件
+    participant Axios as Axios Instance
+    participant Backend as Backend API
+    participant LocalStorage as localStorage
+
+    Component->>Axios: 发起请求
+    Axios->>LocalStorage: 读取 Token
+    LocalStorage-->>Axios: 返回 Token
+    Axios->>Axios: 添加 Authorization 头
+    Axios->>Backend: 发送请求
+    Backend-->>Axios: 返回响应
+    Axios->>Axios: 检查 401 状态码
+    alt 401 错误
+        Axios->>LocalStorage: 清除 Token
+        Axios->>Component: 抛出错误
+        Component->>Component: 跳转登录页
+    else 正常响应
+        Axios-->>Component: 返回数据
+    end
+```
 
 ```typescript
 const api = axios.create({
@@ -377,36 +516,64 @@ const selectAllTables = () => {
 
 ### 认证状态流
 
-```
-应用启动
-    │
-    ▼
-检查 localStorage
-    │
-    ├─ Token 存在 ──▶ 验证 Token ──▶ 获取用户信息 ──▶ 设置认证状态
-    │                                                        │
-    │                                                        ▼
-    │                                              进入主界面
-    │
-    └─ Token 不存在 ──▶ 未认证状态
-                            │
-                            ▼
-                      进入登录页
+```mermaid
+stateDiagram-v2
+    [*] --> AppStart: 应用启动
+    AppStart --> CheckStorage: 检查 localStorage
+
+    CheckStorage --> HasToken: Token 存在
+    CheckStorage --> NoToken: Token 不存在
+
+    HasToken --> ValidateToken: 验证 Token
+    ValidateToken --> GetUserInfo: 获取用户信息
+    GetUserInfo --> Authenticated: 设置认证状态
+    Authenticated --> MainApp: 进入主界面
+
+    NoToken --> Unauthenticated: 未认证状态
+    Unauthenticated --> LoginPage: 进入登录页
+    LoginPage --> Authenticated: 登录成功
+    LoginPage --> RegisterPage: 跳转到注册
+    RegisterPage --> Authenticated: 注册成功
+
+    Authenticated --> Logout: 登出
+    Logout --> Unauthenticated: 清除 Token
+
+    MainApp --> [*]: 应用关闭
+
+    note right of CheckStorage
+        持久化机制：
+        • Token 存储在 localStorage
+        • 用户信息缓存
+    end note
 ```
 
 ### 查询状态流
 
-```
-用户输入问题
-    │
-    ▼
-发送 API 请求
-    │
-    ├─ 请求中 ──▶ 显示加载状态
-    │
-    ├─ 成功 ──▶ 更新对话历史 ──▶ 展示结果
-    │
-    └─ 失败 ──▶ 显示错误提示
+```mermaid
+flowchart TD
+    Start([用户输入问题]) --> Submit[提交查询]
+
+    Submit --> Loading{发送 API 请求}
+
+    Loading -->|请求中| ShowLoading[显示加载状态<br/>加载动画]
+
+    Loading -->|成功| UpdateHistory[更新对话历史]
+    UpdateHistory --> ShowResults[展示查询结果]
+    ShowResults --> Success([查询完成])
+
+    Loading -->|失败| ShowError[显示错误提示]
+    ShowError --> Retry{用户选择}
+    Retry -->|重试| Submit
+    Retry -->|取消| Cancel([取消查询])
+
+    ShowResults -->|继续查询| Start
+
+    style Loading fill:#fff3e0
+    style ShowLoading fill:#fff3e0
+    style ShowResults fill:#e8f5e9
+    style ShowError fill:#ffebee
+    style Success fill:#e8f5e9
+    style Cancel fill:#ffebee
 ```
 
 ## 样式设计

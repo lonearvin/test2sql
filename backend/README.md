@@ -292,58 +292,118 @@ graph TB
       校验通过，执行
 ```
 
+### SQL 安全校验流程图
+
+```mermaid
+flowchart TD
+    Start([接收 SQL]) --> RemoveComments[去除注释<br/>-- 和 /* */]
+
+    RemoveComments --> CheckFirstToken{首 token<br/>是 SELECT?}
+
+    CheckFirstToken -->|否| Reject1["❌ 拒绝执行<br/>只允许 SELECT 查询"]
+    CheckFirstToken -->|是| CheckKeywords
+
+    CheckKeywords{禁止关键字<br/>检测} -->|发现| Reject2["❌ 拒绝执行<br/>SQL 包含禁止关键字"]
+    CheckKeywords -->|未发现| CheckSensitive
+
+    CheckSensitive{敏感字段<br/>检测} -->|发现| MaskFields["🔒 脱敏处理<br/>password → '***'"]
+    CheckSensitive -->|未发现| CheckLimit
+
+    MaskFields --> CheckLimit
+
+    CheckLimit{LIMIT<br/>检查} -->|无 LIMIT| AddLimit["➕ 自动追加<br/>LIMIT 1000"]
+    CheckLimit -->|有 LIMIT| CheckLimitValue
+    CheckLimit -->|超过上限| LowerLimit["📉 降低至上限值"]
+
+    CheckLimitValue{超过上限?} -->|是| LowerLimit
+    CheckLimitValue -->|否| Pass["✅ 校验通过"]
+
+    AddLimit --> Pass
+    LowerLimit --> Pass
+
+    Pass --> Execute[🚀 执行 SQL]
+    Reject1 & Reject2 --> End(["结束"])
+
+    style Reject1 fill:#ffebee,color:#c62828
+    style Reject2 fill:#ffebee,color:#c62828
+    style Pass fill:#e8f5e9,color:#2e7d32
+    style Execute fill:#e3f2fd,color:#1565c0
+```
+
 ---
 
 ## 项目结构
 
-```
-backend/
-│
-├── main.py                          # FastAPI 应用入口，注册中间件和路由
-├── requirements.txt                 # Python 依赖
-├── Dockerfile                       # Docker 镜像构建文件
-├── docker-compose.yml              # Docker Compose 编排文件
-├── .env                             # 环境变量（API Key、数据库地址等）
-│
-└── app/                             # 应用主目录
-    │
-    ├── config/                      # 配置管理
-    │   └── settings.py              # pydantic-settings 配置类，读取 .env
-    │
-    ├── models/                      # 数据模型
-    │   └── database.py              # SQLAlchemy ORM 模型定义
-    │                                #   User, DataSource, SelectedTable, QueryHistory
-    │
-    ├── schemas/                     # 请求/响应模型（Pydantic）
-    │   ├── auth.py                  # Token, TokenData, UserCreate, UserResponse
-    │   ├── user.py                  # UserUpdate, UserResponse
-    │   ├── data_source.py           # DataSourceCreate/Update/Response, TableInfo
-    │   ├── text_to_sql.py           # QueryRequest, QueryResponse, QueryHistoryResponse
-    │   └── semantic.py              # 语义层 Schema（表/字段描述 CRUD + 导入导出）
-    │
-    ├── db/                          # 数据库会话
-    │   └── session.py               # 连接池管理、Session 工厂、自动建表
-    │
-    ├── api/                         # API 路由层
-    │   └── v1/
-    │       ├── api.py               # 路由注册中心，汇总所有子路由
-    │       └── endpoints/           # 端点实现
-    │           ├── auth.py          # POST /register, /login, GET /me
-    │           ├── users.py         # CRUD /users
-    │           ├── data_sources.py  # CRUD /data-sources, 表选择
-    │           └── text_to_sql.py   # POST /query, GET /history, /similar
-    │
-    ├── services/                    # 业务逻辑层
-    │   ├── text_to_sql_service.py   # generate_and_execute(), get_history()
-    │   ├── schema_service.py        # get_schema(), invalidate_cache()
-    │   └── security_service.py      # validate_sql(), sanitize_sql(), mask()
-    │
-    └── infrastructure/              # 基础设施层
-        ├── llm_client.py            # LangChain + DeepSeek，多轮对话 + RAG
-        ├── database_connector.py     # MySQL / PostgreSQL 连接与执行
-        ├── redis_client.py          # Redis 缓存客户端
-        ├── vector_store.py          # ChromaDB 向量存储
-        └── rag_service.py           # RAG 检索与 Prompt 构建
+### 目录树状图
+
+```mermaid
+graph TD
+    subgraph Backend["backend/"]
+        Main[main.py<br/>FastAPI 入口]
+        Requirements[requirements.txt<br/>依赖]
+        Dockerfile[Dockerfile<br/>镜像]
+        Env[.env<br/>环境变量]
+
+        subgraph App["app/"]
+            subgraph Config["config/"]
+                Settings[settings.py<br/>配置管理]
+            end
+
+            subgraph Models["models/"]
+                Database[database.py<br/>ORM 模型]
+            end
+
+            subgraph Schemas["schemas/"]
+                Auth[auth.py<br/>认证]
+                User[user.py<br/>用户]
+                DataSource[data_source.py<br/>数据源]
+                TextToSQL[text_to_sql.py<br/>查询]
+                Semantic[semantic.py<br/>语义层]
+            end
+
+            subgraph DB["db/"]
+                Session[session.py<br/>会话管理]
+            end
+
+            subgraph API["api/v1/"]
+                APIIndex[api.py<br/>路由注册]
+                subgraph Endpoints["endpoints/"]
+                    AuthAPI[auth.py<br/>认证]
+                    UsersAPI[users.py<br/>用户]
+                    DataSourcesAPI[data_sources.py<br/>数据源]
+                    TextToSQLAPI[text_to_sql.py<br/>查询]
+                end
+            end
+
+            subgraph Services["services/"]
+                TextToSQLService[text_to_sql_service.py<br/>查询服务]
+                SchemaService[schema_service.py<br/>Schema 服务]
+                SecurityService[security_service.py<br/>安全服务]
+            end
+
+            subgraph Infrastructure["infrastructure/"]
+                LLMClient[llm_client.py<br/>LLM 客户端]
+                DBConnector[database_connector.py<br/>数据库连接]
+                RedisClient[redis_client.py<br/>Redis 客户端]
+                VectorStore[vector_store.py<br/>向量存储]
+                RAGService[rag_service.py<br/>RAG 服务]
+            end
+        end
+    end
+
+    Main --> App
+    App --> Config & Models & Schemas & DB & API & Services & Infrastructure
+
+    style Backend fill:#f3e5f5,color:#4a148c
+    style App fill:#ffffff,color:#000000
+    style Config fill:#fff3e0,color:#e65100
+    style Models fill:#e8f5e9,color:#1b5e20
+    style Schemas fill:#e3f2fd,color:#0d47a1
+    style DB fill:#fff3e0,color:#e65100
+    style API fill:#e1f5fe,color:#01579b
+    style Endpoints fill:#ffffff,color:#000000
+    style Services fill:#f3e5f5,color:#4a148c
+    style Infrastructure fill:#e8f5e9,color:#1b5e20
 ```
 
 ---
@@ -683,6 +743,70 @@ wrk -t10 -c100 -d30s http://localhost:8000/health
 ---
 
 ## Docker 部署
+
+### 部署架构图
+
+```mermaid
+graph TB
+    subgraph Internet["🌐 Internet"]
+        Users[用户浏览器]
+    end
+
+    subgraph Gateway["🚪 网关层"]
+        Nginx[Nginx<br/>负载均衡<br/>静态资源]
+    end
+
+    subgraph Frontend["💻 前端层"]
+        ViteDev[Vite Dev<br/>开发环境]
+        ViteProd[静态资源<br/>生产环境]
+    end
+
+    subgraph Backend["⚙️ 后端层"]
+        FastAPI[FastAPI<br/>端口 8000]
+        Uvicorn[Uvicorn<br/>ASGI 服务器]
+    end
+
+    subgraph Infrastructure["🗄️ 基础设施"]
+        subgraph Containers["容器服务"]
+            MySQL[MySQL 8.0<br/>端口 3306]
+            Redis[Redis 7<br/>端口 6379]
+            ChromaDB[ChromaDB<br/>端口 8001]
+        end
+
+        subgraph Storage["数据卷"]
+            MySQLVolume["📦 mysql-data"]
+        end
+    end
+
+    subgraph External["🌍 外部服务"]
+        DeepSeekAPI[DeepSeek API]
+        TargetDB[目标数据库<br/>MySQL/PG]
+    end
+
+    Users -->|HTTPS| Nginx
+    Nginx -->|静态资源| ViteProd
+    Nginx -->|API 代理| FastAPI
+
+    ViteDev -->|开发模式| Users
+
+    FastAPI --> Uvicorn
+    FastAPI -->|缓存| Redis
+    FastAPI -->|向量检索| ChromaDB
+    FastAPI -->|管理数据| MySQL
+    FastAPI -->|LLM 调用| DeepSeekAPI
+    FastAPI -->|业务查询| TargetDB
+
+    MySQL --> MySQLVolume
+
+    style Internet fill:#e1f5fe,color:#01579b
+    style Gateway fill:#fff3e0,color:#e65100
+    style Frontend fill:#e8f5e9,color:#1b5e20
+    style Backend fill:#f3e5f5,color:#4a148c
+    style Infrastructure fill:#e3f2fd,color:#0d47a1
+    style Containers fill:#ffffff,color:#000000
+    style Storage fill:#fff8e1,color:#f57f17
+    style External fill:#ffebee,color:#c62828
+```
 
 ### docker-compose.yml 结构
 

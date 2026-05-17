@@ -261,6 +261,90 @@ text_to_sql/
 └── init.sql                        # 数据库初始化脚本
 ```
 
+### 前后端交互数据流
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Frontend as 前端 (React)
+    participant API as API 网关
+    participant Backend as 后端 (FastAPI)
+    participant Service as Service 层
+    participant LLM as LLM API
+    participant Cache as Redis
+    participant Vector as ChromaDB
+    participant DB as MySQL
+
+    User->>Frontend: 1. 输入自然语言问题
+    Frontend->>API: 2. POST /api/v1/text-to-sql/query
+    API->>Backend: 3. 转发请求
+    Backend->>Service: 4. generate_and_execute()
+
+    Service->>Cache: 5. 获取 Schema
+    alt 缓存命中
+        Cache-->>Service: 返回缓存
+    else 缓存未命中
+        Service->>DB: 连接数据库
+        DB-->>Service: 返回表结构
+        Service->>Cache: 写入缓存
+    end
+
+    Service->>Vector: 6. RAG 检索
+    Vector-->>Service: 返回相似查询
+
+    Service->>LLM: 7. LLM 生成 SQL
+    LLM-->>Service: 返回 SQL
+
+    Service->>Service: 8. 安全校验
+    Service->>DB: 9. 执行 SQL
+    DB-->>Service: 返回结果
+
+    Service->>Service: 10. 结果脱敏
+    Service->>Vector: 11. 存储查询历史
+    Service-->>Backend: 返回结果
+    Backend-->>API: 返回响应
+    API-->>Frontend: 返回 QueryResponse
+    Frontend-->>User: 展示结果
+```
+
+### 核心查询流程
+
+```mermaid
+flowchart LR
+    subgraph Input["📥 输入"]
+        Question[自然语言问题]
+    end
+
+    subgraph Process["⚙️ 处理流程"]
+        Auth[鉴权验证]
+        Schema[Schema 获取]
+        RAG[RAG 检索]
+        LLM[LLM 生成]
+        Security[安全校验]
+        Execute[SQL 执行]
+        Mask[结果脱敏]
+    end
+
+    subgraph Output["📤 输出"]
+        Result[查询结果]
+        History[历史记录]
+    end
+
+    Question --> Auth
+    Auth --> Schema
+    Schema --> RAG
+    RAG --> LLM
+    LLM --> Security
+    Security --> Execute
+    Execute --> Mask
+    Mask --> Result
+    Mask --> History
+
+    style Input fill:#e1f5fe,color:#01579b
+    style Process fill:#f3e5f5,color:#4a148c
+    style Output fill:#e8f5e9,color:#1b5e20
+```
+
 ## 环境配置
 
 ### 前置条件
